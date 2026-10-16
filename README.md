@@ -292,3 +292,4 @@ Proprietary - CPMI Certification Academy
 ---
 
 **Note:** This frontend is ready for backend integration. The mock authentication layer (`src/lib/mock-auth.ts`) should be removed once real API endpoints are available.
+
