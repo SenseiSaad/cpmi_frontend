@@ -94,7 +94,7 @@ export default function HomePage() {
       <div className="bg-primary-900 text-white/90 text-xs py-2 px-4 border-b border-primary-800">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-highlight-500 animate-pulse" />
+            <span className="inline-block w-2 h-2 rounded-full bg-secondary-400" />
             <span className="font-semibold text-secondary-400">Official Standards:</span>
             <span className="hidden sm:inline text-white/80">
               Compliant with 49 CFR Part 26 (DBE) & 49 CFR Part 23 (ACDBE) • WCAG 2.1 AA / Section 508
@@ -116,7 +116,7 @@ export default function HomePage() {
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
           <Link href="/" className="focus:outline-none focus:ring-2 focus:ring-primary-500 rounded p-1">
-            <Logo size="md" />
+            <Logo size="md" compactOnMobile />
           </Link>
 
           <div className="hidden lg:flex items-center gap-7">
@@ -140,16 +140,16 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/auth/login"
-              className="px-4 py-2 text-sm font-semibold text-primary-500 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-semibold text-primary-500 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               Sign In
             </Link>
             <Link
               href="/auth/login"
-              className="bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-bold px-5 py-2.5 rounded-xl text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+              className="whitespace-nowrap bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-bold px-4 sm:px-5 py-2.5 rounded-xl text-sm transition-all duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
             >
               Get Started
             </Link>
@@ -213,7 +213,7 @@ export default function HomePage() {
                 <div className="flex flex-wrap items-center gap-4">
                   <Link
                     href="/auth/login"
-                    className="flex items-center gap-2.5 bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-black px-8 py-4 rounded-xl transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 text-base focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+                    className="flex items-center gap-2.5 bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-black px-8 py-4 rounded-xl transition-all duration-200 hover:shadow-xl text-base focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
                   >
                     Get Started <ArrowRight size={18} />
                   </Link>
@@ -229,8 +229,8 @@ export default function HomePage() {
 
               {/* RIGHT: Visual Trust Badge Box (Direct from Reference Screen 1) */}
               <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
                 className="lg:col-span-5"
               >
@@ -1084,7 +1084,7 @@ export default function HomePage() {
               <div className="mt-8 flex flex-wrap justify-center gap-4">
                 <Link
                   href="/auth/login"
-                  className="bg-primary-900 hover:bg-primary-950 text-white font-black px-9 py-4 rounded-xl transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 text-base inline-block focus:outline-none focus:ring-2 focus:ring-primary-900 focus:ring-offset-2"
+                  className="bg-primary-900 hover:bg-primary-950 text-white font-black px-9 py-4 rounded-xl transition-all duration-200 hover:shadow-xl text-base inline-block focus:outline-none focus:ring-2 focus:ring-primary-900 focus:ring-offset-2"
                 >
                   Start Training Now
                 </Link>

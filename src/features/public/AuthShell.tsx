@@ -31,7 +31,7 @@ export default function AuthShell({
           backgroundPosition: "center",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-950/95 via-primary-900/90 to-primary-900/75" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-primary-950/90 to-black/90" />
         <div className="relative z-10 flex flex-col justify-between p-12 w-full text-white">
           <Link href="/" className="inline-block">
             <Logo variant="light" size="md" />

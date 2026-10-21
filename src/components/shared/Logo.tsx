@@ -6,6 +6,8 @@ interface LogoProps {
   variant?: "light" | "dark";
   size?: "sm" | "md" | "lg";
   showSubtitle?: boolean;
+  /** Hide the long subtitle on phones, where it would push header buttons off screen. */
+  compactOnMobile?: boolean;
   className?: string;
 }
 
@@ -13,6 +15,7 @@ export default function Logo({
   variant = "dark",
   size = "md",
   showSubtitle = true,
+  compactOnMobile = false,
   className,
 }: LogoProps) {
   const isLight = variant === "light";
@@ -52,6 +55,7 @@ export default function Logo({
         <span
           className={cn(
             "text-[7px] sm:text-[8px] font-bold tracking-[0.16em] uppercase whitespace-nowrap mt-1 leading-none",
+            compactOnMobile && "hidden sm:block",
             isLight ? "text-white/80" : "text-gray-700"
           )}
         >

@@ -11,8 +11,6 @@ import { authApi } from "@/features/auth/api";
 import { dashboardForRole } from "@/features/auth/dashboard-for-role";
 import { ApiError } from "@/lib/api/error";
 
-type RoleTab = "learner" | "agency_admin" | "training_manager";
-
 export default function LoginPage() {
   return (
     <Suspense>
@@ -31,19 +29,12 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const expired = searchParams.get("expired") === "1";
-  const [activeTab, setActiveTab] = useState<RoleTab>("learner");
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // The tabs only frame the page; the backend decides which portal the account opens.
-  const handleTabChange = (tab: RoleTab) => {
-    setActiveTab(tab);
-    setError("");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +67,7 @@ function LoginForm() {
           backgroundPosition: "center",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-950/95 via-primary-900/90 to-primary-900/75" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-primary-950/90 to-black/90" />
         <div className="relative z-10 flex flex-col justify-between p-12 w-full text-white">
           <Link href="/" className="inline-block">
             <Logo variant="light" size="md" />
@@ -106,7 +97,7 @@ function LoginForm() {
             </motion.p>
 
             <div className="mt-8 flex items-center gap-3 text-xs text-white/70">
-              <span className="w-2 h-2 rounded-full bg-highlight-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-secondary-400" />
               <span>Accreditation Ready • WCAG 2.1 AA / Section 508 Compliant</span>
             </div>
           </div>
@@ -120,7 +111,7 @@ function LoginForm() {
         </div>
       </div>
 
-      {/* Right – Form & Role Tabs (Screen 2 Reference) */}
+      {/* Right – sign-in form */}
       <div className="flex-1 lg:max-w-xl flex items-center justify-center p-6 sm:p-10 bg-white">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -137,46 +128,10 @@ function LoginForm() {
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl font-black text-primary-950">Welcome Back</h1>
             <p className="text-gray-500 text-sm mt-1">
-              Sign in to your account to continue your learning journey.
+              Use the email address your administrator invited.
             </p>
           </div>
 
-          {/* Role Tabs (Screen 2 Direct Reference) */}
-          <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-xl mb-6 text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => handleTabChange("learner")}
-              className={`py-2 px-3 rounded-lg transition-all text-center focus:outline-none ${
-                activeTab === "learner"
-                  ? "bg-white text-primary-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Learner
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("agency_admin")}
-              className={`py-2 px-3 rounded-lg transition-all text-center focus:outline-none ${
-                activeTab === "agency_admin"
-                  ? "bg-white text-primary-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Agency Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("training_manager")}
-              className={`py-2 px-3 rounded-lg transition-all text-center focus:outline-none ${
-                activeTab === "training_manager"
-                  ? "bg-white text-primary-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Super Admin
-            </button>
-          </div>
 
           {expired && !error && (
             <div className="mb-4 p-3 bg-secondary-50 border border-secondary-200 rounded-xl text-secondary-800 text-xs sm:text-sm">
@@ -257,8 +212,6 @@ function LoginForm() {
             </div>
 
             <motion.button
-              whileHover={{ scale: loading ? 1 : 1.01 }}
-              whileTap={{ scale: loading ? 1 : 0.99 }}
               type="submit"
               disabled={loading}
               className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 text-sm mt-2"

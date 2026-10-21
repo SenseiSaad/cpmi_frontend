@@ -347,7 +347,7 @@ export default function CoursePlayerPage() {
         </div>
 
         <div className="p-4 border-t border-white/10 text-[10px] text-white/60 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-highlight-500 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-secondary-400" />
           <span>Server-side position verified for audit</span>
         </div>
       </aside>
