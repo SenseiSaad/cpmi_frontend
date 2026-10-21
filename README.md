@@ -20,29 +20,6 @@ npm start
 
 Visit `http://localhost:3000`
 
-## 🔐 Demo Credentials
-
-The application includes mock authentication for development. Use these credentials to test different roles:
-
-### Super Admin
-- **Email:** `admin@cpmi.gov`
-- **Password:** `admin123`
-- **Access:** Full platform administration
-
-### Training Manager
-- **Email:** `manager@cpmi.gov`
-- **Password:** `manager123`
-- **Access:** Catalog, content, products and pricing
-
-### Agency Admin
-- **Email:** `agency@agency.gov`
-- **Password:** `agency123`
-- **Access:** Agency members, invitations, seats, orders
-
-### Learner
-- **Email:** `learner@agency.gov`
-- **Password:** `learner123`
-- **Access:** Assigned learning, progress, assessments
 
 ## 🏗️ Architecture
 
