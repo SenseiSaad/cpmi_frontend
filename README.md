@@ -20,29 +20,20 @@ npm start
 
 Visit `http://localhost:3000`
 
-## 🔐 Demo Credentials
+## 🔐 Accounts
 
-The application includes mock authentication for development. Use these credentials to test different roles:
+There are no built-in or demo accounts. Sign-in, roles and data come from the Certification
+Academy backend. The first platform administrator is created by the backend seed
+(`BOOTSTRAP_SUPER_ADMIN_EMAIL` / `BOOTSTRAP_SUPER_ADMIN_PASSWORD`); every other account is
+invited from inside the app.
 
-### Super Admin
-- **Email:** `admin@cpmi.gov`
-- **Password:** `admin123`
-- **Access:** Full platform administration
+## 🔌 Backend connection
 
-### Training Manager
-- **Email:** `manager@cpmi.gov`
-- **Password:** `manager123`
-- **Access:** Catalog, content, products and pricing
-
-### Agency Admin
-- **Email:** `agency@agency.gov`
-- **Password:** `agency123`
-- **Access:** Agency members, invitations, seats, orders
-
-### Learner
-- **Email:** `learner@agency.gov`
-- **Password:** `learner123`
-- **Access:** Assigned learning, progress, assessments
+The browser only calls same-origin `/api/*`; Next.js forwards it to `BACKEND_ORIGIN`
+(`next.config.mjs`), so the backend's session and CSRF cookies stay first-party. Production
+values are committed in `.env.production` (public settings only), so a push to GitHub is all
+Vercel needs. For local development create `.env.local` with
+`BACKEND_ORIGIN=http://localhost:4000`.
 
 ## 🏗️ Architecture
 

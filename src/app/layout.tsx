@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "CPMI – Certification Academy LMS",
@@ -13,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

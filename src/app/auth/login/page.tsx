@@ -1,45 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import Logo from "@/components/shared/Logo";
-import { mockLogin } from "@/lib/mock-auth";
-import { getRoleDashboard } from "@/lib/utils";
+import { authApi } from "@/features/auth/api";
+import { dashboardForRole } from "@/features/auth/dashboard-for-role";
+import { ApiError } from "@/lib/api/error";
 
 type RoleTab = "learner" | "agency_admin" | "training_manager";
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+/** Only same-site relative paths may be used as the post-login destination. */
+function safeNext(value: string | null): string | null {
+  return value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth") ? value : null;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const expired = searchParams.get("expired") === "1";
   const [activeTab, setActiveTab] = useState<RoleTab>("learner");
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("learner@agency.gov");
-  const [password, setPassword] = useState("learner123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // The tabs only frame the page; the backend decides which portal the account opens.
   const handleTabChange = (tab: RoleTab) => {
     setActiveTab(tab);
-    setError("");
-    if (tab === "learner") {
-      setEmail("learner@agency.gov");
-      setPassword("learner123");
-    } else if (tab === "agency_admin") {
-      setEmail("agency@agency.gov");
-      setPassword("agency123");
-    } else if (tab === "training_manager") {
-      setEmail("admin@cpmi.gov");
-      setPassword("admin123");
-    }
-  };
-
-  const handleSelectDemo = (selectedEmail: string, selectedPass: string, tab: RoleTab) => {
-    setActiveTab(tab);
-    setEmail(selectedEmail);
-    setPassword(selectedPass);
     setError("");
   };
 
@@ -48,17 +50,19 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    // Mock authentication with realistic delay
-    setTimeout(() => {
-      const user = mockLogin(email, password);
-      if (user) {
-        const dashboard = getRoleDashboard(user.role);
-        router.push(dashboard);
-      } else {
-        setError("Invalid email or password. Please select a valid demo role or check your input.");
-        setLoading(false);
-      }
-    }, 600);
+    try {
+      const { user } = await authApi.login({ email: email.trim(), password });
+      const me = user ?? (await authApi.me());
+      queryClient.setQueryData(["auth", "me"], me);
+      router.replace(safeNext(searchParams.get("next")) ?? dashboardForRole(me.roles));
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status !== 401
+          ? err.message
+          : "Invalid email or password. Please check your details and try again.",
+      );
+      setLoading(false);
+    }
   };
 
   return (
@@ -174,48 +178,11 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Demo Accounts Callout (Kept prominently with passwords shown) */}
-          <div className="mb-6 p-4 bg-blue-50/80 border border-blue-200 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                <CheckCircle2 size={13} className="text-blue-600" />
-                Demo Credentials (Click to Autofill):
-              </p>
-              <span className="text-[10px] text-blue-500 font-semibold uppercase tracking-wider">Fast Access</span>
+          {expired && !error && (
+            <div className="mb-4 p-3 bg-secondary-50 border border-secondary-200 rounded-xl text-secondary-800 text-xs sm:text-sm">
+              Your session has ended. Please sign in again.
             </div>
-            <div className="text-xs text-blue-800 space-y-1.5">
-              <button
-                type="button"
-                onClick={() => handleSelectDemo("learner@agency.gov", "learner123", "learner")}
-                className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                  activeTab === "learner" ? "bg-blue-100/90 font-bold" : "hover:bg-blue-100/50"
-                }`}
-              >
-                <span><strong>Learner:</strong> learner@agency.gov / learner123</span>
-                {activeTab === "learner" && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full">Active</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectDemo("agency@agency.gov", "agency123", "agency_admin")}
-                className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                  activeTab === "agency_admin" ? "bg-blue-100/90 font-bold" : "hover:bg-blue-100/50"
-                }`}
-              >
-                <span><strong>Agency Admin:</strong> agency@agency.gov / agency123</span>
-                {activeTab === "agency_admin" && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full">Active</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectDemo("admin@cpmi.gov", "admin123", "training_manager")}
-                className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                  activeTab === "training_manager" ? "bg-blue-100/90 font-bold" : "hover:bg-blue-100/50"
-                }`}
-              >
-                <span><strong>Super Admin:</strong> admin@cpmi.gov / admin123</span>
-                {activeTab === "training_manager" && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full">Active</span>}
-              </button>
-            </div>
-          </div>
+          )}
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs sm:text-sm">

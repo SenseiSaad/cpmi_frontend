@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bell, ChevronDown, LogOut, HelpCircle, Menu, X, Shield } from "lucide-react";
 import Logo from "@/components/shared/Logo";
-import { mockGetCurrentUser, mockLogout } from "@/lib/mock-auth";
+import { useSession } from "@/features/auth/session-context";
+import { useAgency } from "@/features/auth/agency-context";
+import { ROLE_LABELS } from "@/features/auth/roles";
 
 interface DashboardShellProps {
   children: ReactNode;
@@ -19,20 +21,21 @@ export default function DashboardShell({
   headerContent,
 }: DashboardShellProps) {
   const router = useRouter();
-  const user = mockGetCurrentUser();
+  const { user, signOut } = useSession();
+  const { activeAgency } = useAgency();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleLogout = () => {
-    mockLogout();
+  const handleLogout = async () => {
+    await signOut();
     router.push("/auth/login");
   };
 
-  // Determine role-based display name & initials
-  const firstName = user?.firstName || "Sarah";
-  const lastName = user?.lastName || (user?.role === "super_admin" ? "Smith" : "Johnson");
-  const roleDisplay = user?.role
-    ? user.role.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())
-    : "Learner";
+  const firstName = user?.first_name || user?.email || "";
+  const lastName = user?.last_name || "";
+  const primaryRole = user?.roles[0];
+  const roleDisplay = [primaryRole ? ROLE_LABELS[primaryRole] : "", activeAgency?.name]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FA] text-gray-900">
@@ -123,8 +126,8 @@ export default function DashboardShell({
             {/* User Profile Pill with Avatar (Direct Reference Design) */}
             <div className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer border border-transparent hover:border-gray-200">
               <div className="w-8 h-8 rounded-full bg-primary-900 text-secondary-400 font-bold flex items-center justify-center text-xs shadow-xs border border-secondary-500/30">
-                {firstName[0]}
-                {lastName[0]}
+                {(firstName[0] ?? "").toUpperCase()}
+                {(lastName[0] ?? "").toUpperCase()}
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-bold text-gray-900 leading-tight">

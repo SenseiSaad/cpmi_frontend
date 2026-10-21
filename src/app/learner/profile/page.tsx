@@ -1,22 +1,64 @@
 "use client";
 
-import { useState } from "react";
-import { User, Mail, Building, Shield, Award, Clock, Save, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Award, Save, Check } from "lucide-react";
 import DashboardShell from "@/components/layout/DashboardShell";
 import { LearnerSidebar } from "@/components/layout/SidebarNav";
+import { ErrorState, LoadingState, errorMessage } from "@/components/shared/QueryState";
+import { useAgency } from "@/features/auth/agency-context";
+import { getProfile, learnerKeys, listCertificates, updateProfile, type Profile } from "@/features/learner/api";
+import { ApiError } from "@/lib/api/error";
 
 export default function ProfilePage() {
-  const [firstName, setFirstName] = useState("Sarah");
-  const [lastName, setLastName] = useState("Johnson");
-  const [email, setEmail] = useState("learner@agency.gov");
-  const [agency, setAgency] = useState("Federal Transit Administration (FTA)");
+  const queryClient = useQueryClient();
+  const { memberships, activeAgency } = useAgency();
+  const profileQ = useQuery({ queryKey: learnerKeys.profile, queryFn: getProfile });
+  const certificatesQ = useQuery({ queryKey: learnerKeys.certificates, queryFn: listCertificates });
+  const validCerts = (certificatesQ.data ?? []).filter((c) => c.status === "valid").length;
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [saved, setSaved] = useState(false);
+  const email = profileQ.data?.email ?? "";
+  const agency = activeAgency?.name ?? memberships.map((m) => m.name).join(", ");
+
+  useEffect(() => {
+    if (!profileQ.data) return;
+    setFirstName(profileQ.data.first_name);
+    setLastName(profileQ.data.last_name);
+    setJobTitle(profileQ.data.job_title ?? "");
+  }, [profileQ.data]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateProfile({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        job_title: jobTitle.trim() ? jobTitle.trim() : null,
+      }),
+    onSuccess: () => {
+      queryClient.setQueryData<Profile>(learnerKeys.profile, (prev) =>
+        prev
+          ? { ...prev, first_name: firstName.trim(), last_name: lastName.trim(), job_title: jobTitle.trim() || null }
+          : prev,
+      );
+      void queryClient.invalidateQueries({ queryKey: learnerKeys.profile });
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    },
+  });
+  const fieldErrors = save.error instanceof ApiError ? save.error.fieldErrors : {};
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    if (!firstName.trim() || !lastName.trim()) return;
+    save.mutate();
   };
+
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 
   return (
     <DashboardShell
@@ -28,12 +70,17 @@ export default function ProfilePage() {
         </div>
       }
     >
+      {profileQ.isLoading ? (
+        <LoadingState label="Loading profile…" />
+      ) : profileQ.isError ? (
+        <ErrorState error={profileQ.error} onRetry={() => profileQ.refetch()} />
+      ) : (
       <div className="max-w-4xl space-y-6">
         {/* User Card */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 rounded-2xl bg-[#152A13] text-secondary-400 font-black text-2xl flex items-center justify-center shadow-xs">
-              SJ
+              {initials}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -43,16 +90,15 @@ export default function ProfilePage() {
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5 font-medium">{email}</p>
-              <p className="text-xs text-primary-700 font-bold mt-1">{agency}</p>
+              {jobTitle && <p className="text-xs text-gray-600 mt-0.5">{jobTitle}</p>}
+              {agency && <p className="text-xs text-primary-700 font-bold mt-1">{agency}</p>}
             </div>
           </div>
 
           <div className="flex sm:flex-col items-center sm:items-end gap-3 text-xs text-gray-500">
             <span className="flex items-center gap-1.5 font-bold text-gray-700">
-              <Award size={14} className="text-secondary-600" /> 1 Verified Certificate
-            </span>
-            <span className="flex items-center gap-1.5 font-bold text-gray-700">
-              <Clock size={14} className="text-primary-600" /> 14.5 Lecture Hours Logged
+              <Award size={14} className="text-secondary-600" /> {validCerts} Verified Certificate
+              {validCerts === 1 ? "" : "s"}
             </span>
           </div>
         </div>
@@ -66,23 +112,42 @@ export default function ProfilePage() {
           <form onSubmit={handleSave} className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">First Name</label>
+                <label htmlFor="first_name" className="text-xs font-bold text-gray-700 block mb-1">First Name</label>
                 <input
+                  id="first_name"
                   type="text"
+                  required
+                  maxLength={80}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Last Name</label>
+                <label htmlFor="last_name" className="text-xs font-bold text-gray-700 block mb-1">Last Name</label>
                 <input
+                  id="last_name"
                   type="text"
+                  required
+                  maxLength={80}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500"
                 />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="job_title" className="text-xs font-bold text-gray-700 block mb-1">Job Title</label>
+              <input
+                id="job_title"
+                type="text"
+                maxLength={120}
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500"
+              />
+              {fieldErrors.job_title && <p className="text-[10px] text-red-600 mt-1">{fieldErrors.job_title}</p>}
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -94,14 +159,14 @@ export default function ProfilePage() {
                   disabled
                   className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-50 text-gray-500 rounded-xl text-xs sm:text-sm cursor-not-allowed"
                 />
-                <p className="text-[10px] text-gray-400 mt-1">Managed by your agency administrator.</p>
+                <p className="text-[10px] text-gray-400 mt-1">Email is managed through your account settings.</p>
               </div>
 
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1">Affiliated Agency / DOT</label>
                 <input
                   type="text"
-                  value={agency}
+                  value={agency || "—"}
                   disabled
                   className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-50 text-gray-500 rounded-xl text-xs sm:text-sm cursor-not-allowed"
                 />
@@ -113,21 +178,25 @@ export default function ProfilePage() {
                 <span className="text-xs font-bold text-highlight-600 flex items-center gap-1.5">
                   <Check size={14} /> Profile preferences updated successfully.
                 </span>
+              ) : save.isError ? (
+                <span className="text-xs font-bold text-red-600" role="alert">{errorMessage(save.error)}</span>
               ) : (
                 <span className="text-xs text-gray-400">All certificates will be issued to this legal name.</span>
               )}
 
               <button
                 type="submit"
+                disabled={save.isPending}
                 className="bg-[#152A13] hover:bg-primary-800 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-xs"
               >
                 <Save size={13} className="text-secondary-400" />
-                <span>Save Changes</span>
+                <span>{save.isPending ? "Saving…" : "Save Changes"}</span>
               </button>
             </div>
           </form>
         </div>
       </div>
+      )}
     </DashboardShell>
   );
 }

@@ -2,20 +2,18 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { mockGetCurrentUser } from "@/lib/mock-auth";
-import { getRoleDashboard } from "@/lib/utils";
+import { useSession } from "@/features/auth/session-context";
+import { dashboardForRole } from "@/features/auth/dashboard-for-role";
 
+/** Sends a signed-in user to their portal, everyone else to sign-in. */
 export default function DashboardRedirect() {
   const router = useRouter();
+  const { status, user } = useSession();
 
   useEffect(() => {
-    const user = mockGetCurrentUser();
-    if (user) {
-      router.replace(getRoleDashboard(user.role));
-    } else {
-      router.replace("/learner");
-    }
-  }, [router]);
+    if (status === "authenticated" && user) router.replace(dashboardForRole(user.roles));
+    else if (status === "unauthenticated") router.replace("/auth/login?next=/dashboard");
+  }, [status, user, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

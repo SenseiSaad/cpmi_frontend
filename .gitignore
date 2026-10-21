@@ -6,6 +6,10 @@ out/
 .env
 .env.local
 .env.*.local
+.env.development
+# .env.production holds only PUBLIC build settings (API proxy target) and is committed
+# on purpose, so a push to GitHub is all Vercel needs.
+!.env.production
 
 npm-debug.log*
 yarn-debug.log*
@@ -15,3 +19,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 test-results
+*.tsbuildinfo
+# Local tooling
+.claude/
+.mcp.json

@@ -12,6 +12,14 @@ import {
   BarChart3,
   Settings,
   Users,
+  Mail,
+  Armchair,
+  ShoppingCart,
+  Receipt,
+  CreditCard,
+  Package,
+  KeyRound,
+  ScrollText,
 } from "lucide-react";
 
 // 1. Learner Sidebar Navigation (Screen 3 Reference)
@@ -54,8 +62,12 @@ export function LearnerSidebar() {
 const agencyNavItems = [
   { href: "/agency", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/agency/members", icon: Users, label: "Team Management" },
+  { href: "/agency/invitations", icon: Mail, label: "Invitations" },
+  { href: "/agency/seats", icon: Armchair, label: "Seats" },
+  { href: "/agency/catalogue", icon: ShoppingCart, label: "Buy Training" },
+  { href: "/agency/orders", icon: Receipt, label: "Orders" },
   { href: "/agency/reports", icon: BarChart3, label: "Compliance Reports" },
-  { href: "/agency/settings", icon: Settings, label: "Seats & Invoicing" },
+  { href: "/agency/settings", icon: CreditCard, label: "Billing & Invoicing" },
 ];
 
 export function AgencySidebar() {
@@ -65,8 +77,7 @@ export function AgencySidebar() {
       {agencyNavItems.map((item) => {
         const isActive =
           pathname === item.href ||
-          (item.href !== "/agency" && pathname.startsWith(item.href)) ||
-          (item.href === "/agency" && pathname === "/agency/members");
+          (item.href !== "/agency" && pathname.startsWith(item.href));
         return (
           <Link
             key={item.href}
@@ -91,8 +102,11 @@ const adminNavItems = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/agencies", icon: Building2, label: "Agencies" },
   { href: "/admin/courses", icon: BookOpen, label: "Courses & Content" },
+  { href: "/admin/products", icon: Package, label: "Products & Pricing" },
+  { href: "/admin/entitlements", icon: KeyRound, label: "Entitlements" },
+  { href: "/admin/audit", icon: ScrollText, label: "Audit Log" },
   { href: "/admin/reports", icon: BarChart3, label: "Reports & Analytics" },
-  { href: "/admin/settings", icon: Settings, label: "Settings & Pricing" },
+  { href: "/admin/settings", icon: Settings, label: "Settings" },
 ];
 
 export function AdminSidebar() {

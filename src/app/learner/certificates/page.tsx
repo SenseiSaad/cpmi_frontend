@@ -2,33 +2,30 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  Award,
-  Download,
-  Printer,
-  ShieldCheck,
-  CheckCircle,
-  ExternalLink,
-  Share2,
-  Calendar,
-  FileText,
-} from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Award, Download, Printer, ShieldCheck, CheckCircle, AlertTriangle } from "lucide-react";
 import DashboardShell from "@/components/layout/DashboardShell";
 import { LearnerSidebar } from "@/components/layout/SidebarNav";
 import Logo from "@/components/shared/Logo";
-import { certificates } from "@/lib/data";
+import { EmptyState, ErrorState, LoadingState, errorMessage } from "@/components/shared/QueryState";
+import { useSession } from "@/features/auth/session-context";
+import { downloadCertificatePdf, learnerKeys, listCertificates, type MyCertificate } from "@/features/learner/api";
+import { formatDate } from "@/features/learner/format";
 
 export default function CertificatesPage() {
-  const [activeCert, setActiveCert] = useState(certificates[0]);
-  const [downloading, setDownloading] = useState(false);
+  const { user } = useSession();
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: learnerKeys.certificates,
+    queryFn: listCertificates,
+  });
+  const certificates = data ?? [];
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeCert: MyCertificate | undefined =
+    certificates.find((c) => c.uuid === activeId) ?? certificates[0];
 
-  const handleDownload = () => {
-    setDownloading(true);
-    setTimeout(() => {
-      setDownloading(false);
-      window.print();
-    }, 600);
-  };
+  const download = useMutation({ mutationFn: (cert: MyCertificate) => downloadCertificatePdf(cert) });
+  const downloading = download.isPending;
+  const handleDownload = () => activeCert && download.mutate(activeCert);
 
   const handlePrint = () => {
     window.print();
@@ -48,7 +45,40 @@ export default function CertificatesPage() {
         </div>
       }
     >
+      {isLoading ? (
+        <LoadingState label="Loading certificates…" />
+      ) : isError ? (
+        <ErrorState error={error} onRetry={() => refetch()} />
+      ) : !activeCert ? (
+        <EmptyState
+          title="No certificates yet"
+          description="Complete a course and pass its assessments to earn your certificate."
+          action={
+            <Link href="/learner/courses" className="mt-2 text-xs font-bold text-primary-700 hover:text-primary-900">
+              Go to My Courses
+            </Link>
+          }
+        />
+      ) : (
       <div className="space-y-6">
+        {certificates.length > 1 && (
+          <div className="flex flex-wrap gap-2 print:hidden">
+            {certificates.map((c) => (
+              <button
+                key={c.uuid}
+                onClick={() => setActiveId(c.uuid)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                  c.uuid === activeCert.uuid
+                    ? "bg-[#152A13] text-white border-[#152A13]"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {c.courseTitle ?? c.moduleTitle ?? c.certificateNumber}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Certificate Display Workspace (Matching Screen 6) */}
         <div className="grid lg:grid-cols-12 gap-8 items-start">
           {/* LEFT: THE OFFICIAL CERTIFICATE CANVAS (Screen 6 Direct Reference) */}
@@ -79,7 +109,7 @@ export default function CertificatesPage() {
               {/* Recipient Name (Sarah Johnson Reference) */}
               <div className="text-center my-6">
                 <span className="text-3xl sm:text-4xl font-serif font-black text-gray-900 border-b-2 border-secondary-500 pb-1 px-8 inline-block">
-                  {activeCert.recipientName}
+                  {user ? `${user.first_name} ${user.last_name}` : ""}
                 </span>
               </div>
 
@@ -89,7 +119,7 @@ export default function CertificatesPage() {
                   has successfully completed all requirements, statutory assessments, and comprehensive examinations for the
                 </p>
                 <p className="text-base sm:text-lg font-black text-primary-900 leading-tight">
-                  {activeCert.courseName}
+                  {activeCert.courseTitle ?? activeCert.moduleTitle ?? "CPMI Training Program"}
                 </p>
               </div>
 
@@ -99,15 +129,15 @@ export default function CertificatesPage() {
                 <div className="text-left space-y-1.5 text-xs text-gray-600">
                   <p>
                     <span className="font-bold text-gray-400 uppercase text-[10px] block">Certificate ID:</span>
-                    <span className="font-mono font-bold text-primary-900">{activeCert.id}</span>
+                    <span className="font-mono font-bold text-primary-900">{activeCert.certificateNumber}</span>
                   </p>
                   <p>
                     <span className="font-bold text-gray-400 uppercase text-[10px] block">Issue Date:</span>
-                    <span className="font-semibold text-gray-800">{activeCert.issueDate}</span>
+                    <span className="font-semibold text-gray-800">{formatDate(activeCert.issuedAt)}</span>
                   </p>
                   <p>
                     <span className="font-bold text-gray-400 uppercase text-[10px] block">Expiry Date:</span>
-                    <span className="font-semibold text-gray-800">{activeCert.expiryDate}</span>
+                    <span className="font-semibold text-gray-800">{activeCert.expiresAt ? formatDate(activeCert.expiresAt) : "No expiry"}</span>
                   </p>
                 </div>
 
@@ -122,14 +152,16 @@ export default function CertificatesPage() {
                   </div>
                 </div>
 
-                {/* Right Signature */}
+                {/* Right Status */}
                 <div className="text-center sm:text-right space-y-1">
-                  <div className="font-serif italic text-xl font-bold text-primary-900 pb-1">
-                    J. M. Franklin
-                  </div>
-                  <div className="w-40 h-px bg-gray-300 mx-auto sm:ml-auto" />
-                  <p className="text-[10px] font-bold uppercase text-gray-500">Authorized Signature</p>
-                  <p className="text-[9px] text-gray-400">Executive Director, CPMI</p>
+                  <p className="text-[10px] font-bold uppercase text-gray-500">Status</p>
+                  <p
+                    className={`text-sm font-black ${
+                      activeCert.status === "valid" ? "text-highlight-600" : "text-red-600"
+                    }`}
+                  >
+                    {activeCert.status === "valid" ? "Valid" : "Revoked"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -145,12 +177,17 @@ export default function CertificatesPage() {
               {/* Download PDF (Green Primary Button) */}
               <button
                 onClick={handleDownload}
-                disabled={downloading}
+                disabled={downloading || activeCert.status !== "valid"}
                 className="w-full flex items-center justify-center gap-2 bg-[#152A13] hover:bg-primary-800 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <Download size={15} className="text-secondary-400" />
                 <span>{downloading ? "Preparing PDF..." : "Download PDF"}</span>
               </button>
+              {download.isError && (
+                <p className="text-[11px] font-semibold text-red-600" role="alert">
+                  {errorMessage(download.error)}
+                </p>
+              )}
 
               {/* Print Certificate */}
               <button
@@ -161,17 +198,28 @@ export default function CertificatesPage() {
                 <span>Print Certificate</span>
               </button>
 
-              {/* Verify Certificate Link */}
-              <Link
-                href={`/verify/${activeCert.id}`}
-                className="w-full flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-3 px-4 rounded-xl text-xs transition-all"
-              >
-                <ShieldCheck size={15} className="text-highlight-600" />
-                <span>Verify Certificate</span>
-              </Link>
+              {/* Verification */}
+              <div className="flex items-start gap-2 border border-gray-200 text-gray-700 py-3 px-4 rounded-xl text-[11px] leading-relaxed">
+                <ShieldCheck size={15} className="text-highlight-600 flex-shrink-0 mt-0.5" />
+                <span>
+                  The downloaded PDF includes a private verification link that anyone can use to confirm this
+                  certificate is authentic.
+                </span>
+              </div>
             </div>
 
-            {/* Audit Status Card */}
+            {activeCert.status === "revoked" ? (
+              <div className="bg-red-50 border border-red-200 rounded-3xl p-5 text-xs text-red-900 space-y-2">
+                <div className="flex items-center gap-2 font-black">
+                  <AlertTriangle size={15} className="text-red-600" />
+                  <span>Certificate Revoked</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Revoked {formatDate(activeCert.revokedAt)}
+                  {activeCert.revocationReason ? `: ${activeCert.revocationReason}` : "."}
+                </p>
+              </div>
+            ) : (
             <div className="bg-emerald-50/80 border border-emerald-200 rounded-3xl p-5 text-xs text-emerald-900 space-y-2">
               <div className="flex items-center gap-2 font-black text-emerald-950">
                 <CheckCircle size={15} className="text-highlight-600" />
@@ -181,9 +229,11 @@ export default function CertificatesPage() {
                 This certificate is officially recorded in the CPMI immutable compliance registry. Any third-party or government auditor can verify validity.
               </p>
             </div>
+            )}
           </div>
         </div>
       </div>
+      )}
     </DashboardShell>
   );
 }

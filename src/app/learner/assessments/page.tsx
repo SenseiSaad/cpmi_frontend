@@ -3,74 +3,40 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ClipboardList, Clock, Award, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ClipboardList, Clock, CheckCircle, ArrowRight } from "lucide-react";
 import DashboardShell from "@/components/layout/DashboardShell";
 import { LearnerSidebar } from "@/components/layout/SidebarNav";
+import { EmptyState, ErrorState, LoadingState } from "@/components/shared/QueryState";
+import { learnerKeys, listAllAssessments, listEnrollments, type EnrollmentAssessment } from "@/features/learner/api";
+import { formatDate } from "@/features/learner/format";
 
-const assessmentsList = [
-  {
-    id: "m4-quiz",
-    title: "Module 4 Assessment: DBE Program Requirements",
-    questions: 10,
-    duration: "25 min",
-    dueDate: "Apr 20, 2026",
-    status: "available",
-    score: null,
-    passingScore: 80,
-    desc: "Tests understanding of triennial goal setting, availability base figures, and race-neutral measures.",
-  },
-  {
-    id: "m5-quiz",
-    title: "Module 5 Assessment: Compliance & Monitoring",
-    questions: 15,
-    duration: "30 min",
-    dueDate: "Apr 28, 2026",
-    status: "upcoming",
-    score: null,
-    passingScore: 80,
-    desc: "Evaluates Commercially Useful Function (CUF) jobsite inspections and subcontractor payment rules.",
-  },
-  {
-    id: "final-exam",
-    title: "Final Comprehensive Certification Exam",
-    questions: 50,
-    duration: "90 min",
-    dueDate: "May 15, 2026",
-    status: "upcoming",
-    score: null,
-    passingScore: 80,
-    desc: "Comprehensive 50-question exam covering all 11 modules required for official CPMI Certification.",
-  },
-  {
-    id: "m1-quiz",
-    title: "Module 1 Assessment: Introduction to DBE Program",
-    questions: 10,
-    duration: "20 min",
-    dueDate: "Completed",
-    status: "completed",
-    score: 100,
-    passingScore: 80,
-    desc: "Foundations of 49 CFR Part 26, historical context, and DBELO responsibilities.",
-  },
-  {
-    id: "m2-quiz",
-    title: "Module 2 Assessment: Eligibility & PNW",
-    questions: 12,
-    duration: "25 min",
-    dueDate: "Completed",
-    status: "completed",
-    score: 92,
-    passingScore: 80,
-    desc: "Personal Net Worth calculations, rebuttable presumptions, and small business size standards.",
-  },
-];
+function statusLabel(a: EnrollmentAssessment): string {
+  if (a.hasPassed) return `Passed • Best ${a.bestScorePercent ?? 0}%`;
+  if (a.inProgressAttemptId) return "Attempt in progress";
+  if (a.maxAttempts !== null && a.attemptsUsed >= a.maxAttempts) return "No attempts remaining";
+  if (a.bestScorePercent !== null) return `Best ${a.bestScorePercent}% • Retake available`;
+  if (new Date(a.availableFrom).getTime() > Date.now()) return `Opens ${formatDate(a.availableFrom)}`;
+  return `Due ${formatDate(a.enrollment.due_at)}`;
+}
 
 export default function AssessmentsPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
 
-  const filtered = assessmentsList.filter((a) => {
-    if (filter === "completed") return a.status === "completed";
-    if (filter === "pending") return a.status !== "completed";
+  const enrollmentsQ = useQuery({ queryKey: learnerKeys.enrollments, queryFn: listEnrollments });
+  const enrollments = enrollmentsQ.data ?? [];
+  const assessmentsQ = useQuery({
+    queryKey: [...learnerKeys.allAssessments, "with-completed", enrollments.map((e) => e.uuid).join(",")],
+    queryFn: () => listAllAssessments(enrollments),
+    enabled: enrollmentsQ.isSuccess,
+  });
+  const all = assessmentsQ.data ?? [];
+  const query = enrollmentsQ.isError ? enrollmentsQ : assessmentsQ;
+  const loading = enrollmentsQ.isLoading || (enrollmentsQ.isSuccess && assessmentsQ.isLoading);
+
+  const filtered = all.filter((a) => {
+    if (filter === "completed") return a.hasPassed;
+    if (filter === "pending") return !a.hasPassed;
     return true;
   });
 
@@ -120,13 +86,28 @@ export default function AssessmentsPage() {
           </div>
         </div>
 
+        {loading && <LoadingState label="Loading assessments…" />}
+        {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} />}
+        {!loading && !query.isError && filtered.length === 0 && (
+          <EmptyState
+            title={all.length ? "Nothing here" : "No assessments yet"}
+            description={
+              all.length
+                ? "No assessments match this filter."
+                : "Assessments for your enrolled courses will appear here."
+            }
+          />
+        )}
+
         {/* Assessment Cards */}
         <div className="space-y-4">
           {filtered.map((item) => {
-            const isCompleted = item.status === "completed";
+            const isCompleted = item.hasPassed;
+            const exhausted =
+              !item.hasPassed && !item.inProgressAttemptId && item.maxAttempts !== null && item.attemptsUsed >= item.maxAttempts;
             return (
               <motion.div
-                key={item.id}
+                key={`${item.enrollment.uuid}:${item.assessmentPublicId}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs hover:shadow-sm transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6"
@@ -151,28 +132,37 @@ export default function AssessmentsPage() {
                             : "bg-amber-50 text-amber-700"
                         }`}
                       >
-                        {isCompleted ? `Passed • Score ${item.score}%` : `Due ${item.dueDate}`}
+                        {statusLabel(item)}
                       </span>
                       <span className="text-xs text-gray-400 font-medium">
-                        {item.questions} Questions • {item.duration}
+                        {item.kind === "final" ? "Final Exam" : "Module Assessment"} • Attempts {item.attemptsUsed}
+                        {item.maxAttempts !== null ? ` of ${item.maxAttempts}` : ""}
                       </span>
                     </div>
 
                     <h3 className="text-base font-black text-gray-900">{item.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1 max-w-xl">{item.desc}</p>
+                    <p className="text-xs text-gray-500 mt-1 max-w-xl">{item.enrollment.course.title}</p>
                   </div>
                 </div>
 
                 <div className="sm:self-center w-full sm:w-auto">
                   <Link
-                    href={`/learner/assessments/${item.id}`}
+                    href={`/learner/assessments/${item.enrollment.uuid}?assessment=${item.assessmentPublicId}`}
                     className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 font-bold px-6 py-2.5 rounded-xl text-xs transition-all ${
                       isCompleted
                         ? "border border-gray-200 text-gray-700 hover:bg-gray-50"
                         : "bg-[#152A13] hover:bg-primary-800 text-white shadow-xs"
                     }`}
                   >
-                    <span>{isCompleted ? "Review Results" : "Take Assessment"}</span>
+                    <span>
+                      {isCompleted || exhausted
+                        ? "View Results"
+                        : item.inProgressAttemptId
+                        ? "Resume Attempt"
+                        : item.attemptsUsed > 0
+                        ? "Retake Assessment"
+                        : "Take Assessment"}
+                    </span>
                     <ArrowRight size={13} className="text-secondary-400" />
                   </Link>
                 </div>

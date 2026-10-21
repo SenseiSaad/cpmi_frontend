@@ -29,7 +29,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import Logo from "@/components/shared/Logo";
-import { modules, certificates } from "@/lib/data";
+import { modules } from "@/features/public/marketing";
+import { extractToken, formatDate, isPlausibleToken, publicApi, type CertificateVerification } from "@/features/public/api";
+import { ApiError } from "@/lib/api/error";
 
 const fadeUp = {
   initial: { opacity: 0, y: 25 },
@@ -51,21 +53,32 @@ const stagger = {
 export default function HomePage() {
   const [activeModuleIndex, setActiveModuleIndex] = useState(3); // Module 4 by default
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [verifyInput, setVerifyInput] = useState("CPMI-2026-000123");
-  const [verifyResult, setVerifyResult] = useState<typeof certificates[0] | null>(certificates[0]);
+  const [verifyInput, setVerifyInput] = useState("");
+  const [verifyResult, setVerifyResult] = useState<CertificateVerification | null>(null);
   const [verifyError, setVerifyError] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setVerifyError("");
-    const found = certificates.find(
-      (c) => c.id.toLowerCase() === verifyInput.trim().toLowerCase()
-    );
-    if (found) {
-      setVerifyResult(found);
-    } else {
-      setVerifyResult(null);
-      setVerifyError("No active certificate found matching this credential ID. Please check the number and try again.");
+    setVerifyResult(null);
+    const token = extractToken(verifyInput);
+    if (!isPlausibleToken(token)) {
+      setVerifyError("Please enter the full verification token or link printed on the certificate.");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const result = await publicApi.verifyCertificate(token);
+      if (result.found && result.certificate) {
+        setVerifyResult(result);
+      } else {
+        setVerifyError("No certificate found matching this verification token. Please check it and try again.");
+      }
+    } catch (err) {
+      setVerifyError(err instanceof ApiError ? err.message : "Verification is unavailable right now. Please try again.");
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -797,15 +810,16 @@ export default function HomePage() {
                     type="text"
                     value={verifyInput}
                     onChange={(e) => setVerifyInput(e.target.value)}
-                    placeholder="Enter Certificate ID (e.g. CPMI-2026-000123)"
+                    placeholder="Enter verification token or link from the certificate"
                     className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-6 py-3.5 rounded-xl text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={verifying}
+                  className="bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 text-white font-bold px-6 py-3.5 rounded-xl text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  Verify Certificate
+                  {verifying ? "Verifying…" : "Verify Certificate"}
                 </button>
               </form>
 
@@ -816,7 +830,7 @@ export default function HomePage() {
               )}
 
               {/* Certificate Card Render (Matching Screen 6) */}
-              {verifyResult && (
+              {verifyResult?.certificate && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -835,35 +849,41 @@ export default function HomePage() {
 
                     <p className="text-xs text-gray-500 italic mt-3">This certifies that</p>
                     <p className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 border-b-2 border-secondary-500 pb-1 px-4">
-                      {verifyResult.recipientName}
+                      {verifyResult.certificate.learnerName}
                     </p>
 
                     <p className="text-xs text-gray-600 mt-4 max-w-lg leading-relaxed">
                       has successfully satisfied all rigorous curriculum requirements, module assessments, and final examinations for the
                     </p>
                     <p className="text-base sm:text-lg font-bold text-primary-900 mt-1">
-                      {verifyResult.courseName}
+                      {verifyResult.certificate.courseTitle}
                     </p>
 
                     {/* Metadata Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full mt-8 pt-6 border-t border-gray-200 text-left">
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase">Certificate ID</p>
-                        <p className="text-xs font-black text-primary-900 mt-0.5">{verifyResult.id}</p>
+                        <p className="text-xs font-black text-primary-900 mt-0.5">{verifyResult.certificate.certificateNumber}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase">Issue Date</p>
-                        <p className="text-xs font-bold text-gray-800 mt-0.5">{verifyResult.issueDate}</p>
+                        <p className="text-xs font-bold text-gray-800 mt-0.5">{formatDate(verifyResult.certificate.issuedAt)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase">Expiry Date</p>
-                        <p className="text-xs font-bold text-gray-800 mt-0.5">{verifyResult.expiryDate}</p>
+                        <p className="text-xs font-bold text-gray-800 mt-0.5">{formatDate(verifyResult.certificate.expiresAt)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase">Status</p>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-highlight-600 bg-highlight-50 px-2 py-0.5 rounded-full mt-0.5">
-                          <CheckCircle size={11} /> {verifyResult.verificationStatus}
-                        </span>
+                        {verifyResult.valid ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-highlight-600 bg-highlight-50 px-2 py-0.5 rounded-full mt-0.5">
+                            <CheckCircle size={11} /> Verified &amp; Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full mt-0.5">
+                            Revoked
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
