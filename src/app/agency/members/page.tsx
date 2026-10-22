@@ -1,210 +1,242 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Search, UserPlus, MoreVertical } from "lucide-react";
-import { memberName, useAgencyMembers, useUpdateMember, type AgencyMember } from "@/features/agency/api";
-import { AgencyPage, Banner, Modal, Panel, StatusPill, initials, primaryBtn, outlineBtn, thCls, inputCls } from "@/features/agency/ui";
-import { ErrorState, LoadingState, EmptyState, errorMessage } from "@/components/shared/QueryState";
-import { formatDate } from "@/features/agency/api";
+import { Search, UserCog, UserPlus, Users } from "lucide-react";
+import { useMemo, useState } from "react";
 
-const PAGE_SIZE = 25;
+import { BulkInviteDialog, InviteDialog } from "@/components/agency/invite-dialogs";
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Field, Input } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
+import { Panel } from "@/components/ui/panel";
+import { Pagination } from "@/components/ui/pagination";
+import { Tabs } from "@/components/ui/tabs";
+import { api } from "@/lib/api";
+import { useAction, useMembers } from "@/lib/api/hooks";
+import type { MemberRow } from "@/lib/api/types";
+import { initials, relativeDays } from "@/lib/utils";
+
+const PAGE_SIZE = 20;
+type StatusFilter = "all" | "active" | "invited" | "suspended" | "left";
+
+function memberName(member: MemberRow): string {
+  return `${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email;
+}
 
 export default function AgencyMembersPage() {
   const [search, setSearch] = useState("");
-  const [q, setQ] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<AgencyMember | null>(null);
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [selected, setSelected] = useState<MemberRow | null>(null);
+  const [reference, setReference] = useState("");
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setQ(search.trim());
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
+  const members = useMembers({
+    ...(status === "all" ? {} : { status }),
+    ...(appliedSearch ? { search: appliedSearch } : {}),
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
 
-  const members = useAgencyMembers({ page, pageSize: PAGE_SIZE, q: q || undefined });
-  const update = useUpdateMember();
+  const setMemberStatus = useAction(api.members.setStatus, { invalidate: ["members", "members-all", "agency-overview"], success: "Member updated" });
+  const setEmployeeReference = useAction(api.members.setEmployeeReference, { invalidate: ["members", "members-all"], success: "Employee reference saved" });
 
-  const run = (payload: { role?: string; status?: string }, done: string) => {
-    if (!selected) return;
-    update.mutate(
-      { memberUuid: selected.uuid, ...payload },
+  const pageCount = Math.max(1, Math.ceil((members.data?.total ?? 0) / PAGE_SIZE));
+
+  const columns = useMemo<Column<MemberRow>[]>(
+    () => [
       {
-        onSuccess: () => {
-          setNotice({ tone: "success", text: done });
-          setSelected(null);
-        },
-        onError: (err) => setNotice({ tone: "error", text: errorMessage(err) })
-      }
-    );
-  };
-
-  const data = members.data;
+        key: "member",
+        header: "Member",
+        width: "minmax(0,2fr)",
+        cell: (m) => (
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-navy-900 text-xs font-bold text-brand-200" aria-hidden>
+              {initials(m.user.firstName, m.user.lastName)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-ink-900">{memberName(m)}</p>
+              <p className="truncate font-mono text-xs text-ink-600">{m.user.email}</p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "roles",
+        header: "Roles",
+        width: "150px",
+        cell: (m) => (
+          <div className="flex flex-wrap gap-1">
+            {m.roles.length > 0 ? m.roles.map((role) => <Badge key={role} tone="navy">{role.replace(/_/g, " ")}</Badge>) : <span className="text-xs text-ink-500">—</span>}
+          </div>
+        ),
+      },
+      { key: "status", header: "Status", width: "120px", cell: (m) => <StatusPill status={m.membershipStatus} /> },
+      {
+        key: "reference",
+        header: "Employee ref.",
+        width: "150px",
+        cell: (m) => <span className="truncate font-mono text-xs text-ink-600">{m.employeeReference ?? "—"}</span>,
+      },
+      { key: "joined", header: "Joined", width: "120px", cell: (m) => <span className="text-ink-600">{m.joinedAt ? relativeDays(m.joinedAt) : "Invited"}</span> },
+      {
+        key: "actions",
+        header: "Actions",
+        width: "110px",
+        align: "right",
+        cell: (m) => (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<UserCog className="size-4" aria-hidden />}
+            onClick={() => {
+              setSelected(m);
+              setReference(m.employeeReference ?? "");
+            }}
+          >
+            Manage
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
-    <AgencyPage title="Team Members">
-      <div className="space-y-4">
-        {notice && (
-          <Banner tone={notice.tone} onClose={() => setNotice(null)}>
-            {notice.text}
-          </Banner>
-        )}
-        <Panel>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div className="relative w-full sm:w-80">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="search"
-                aria-label="Search team members"
-                placeholder="Search team members..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-              />
-            </div>
-            <Link href="/agency/invitations" className={primaryBtn}>
-              <UserPlus size={14} className="text-secondary-400" /> Invite Users
-            </Link>
-          </div>
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Team members"
+        subtitle="Invite staff, review membership status and maintain employee references."
+        actions={
+          <>
+            <Button icon={<UserPlus className="size-4" aria-hidden />} onClick={() => setInviteOpen(true)}>Invite member</Button>
+            <Button variant="secondary" onClick={() => setBulkOpen(true)}>Bulk CSV</Button>
+          </>
+        }
+      />
 
-          {members.isLoading ? (
-            <LoadingState />
-          ) : members.isError ? (
-            <ErrorState error={members.error} onRetry={() => members.refetch()} />
-          ) : !data?.items.length ? (
-            <EmptyState title={q ? "No team members match your search." : "No team members yet"} />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className={`${thCls} pl-2`}>Name</th>
-                    <th className={thCls}>Email</th>
-                    <th className={thCls}>Role</th>
-                    <th className={thCls}>Joined</th>
-                    <th className={thCls}>Status</th>
-                    <th className={`${thCls} text-right pr-2`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                  {data.items.map((m) => (
-                    <tr key={m.uuid} className="hover:bg-gray-50/70 transition-colors">
-                      <td className="py-4 pl-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary-900 text-secondary-400 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {initials(memberName(m))}
-                          </div>
-                          <span className="font-bold text-gray-900 text-xs sm:text-sm">{memberName(m)}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 font-mono text-[11px] text-gray-500">{m.email}</td>
-                      <td className="py-4">
-                        <span className="bg-gray-100 text-gray-700 font-bold px-2.5 py-1 rounded-md text-[10px]">
-                          {m.role === "agency_admin" ? "Agency Admin" : "Learner"}
-                        </span>
-                      </td>
-                      <td className="py-4 text-gray-500">{formatDate(m.joined_at)}</td>
-                      <td className="py-4">
-                        <StatusPill status={m.status} />
-                      </td>
-                      <td className="py-4 text-right pr-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelected(m)}
-                          className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                          aria-label={`Manage ${memberName(m)}`}
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.pages > 1 && (
-                <div className="flex items-center justify-between pt-4 text-xs text-gray-500">
-                  <span>
-                    Page {data.page} of {data.pages} · {data.total} members
-                  </span>
-                  <div className="flex gap-2">
-                    <button type="button" className={outlineBtn} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                      Previous
-                    </button>
-                    <button type="button" className={outlineBtn} disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)}>
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </Panel>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <Tabs
+          label="Filter members by status"
+          value={status}
+          onChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+          items={[
+            { value: "all", label: "All" },
+            { value: "active", label: "Active" },
+            { value: "invited", label: "Invited" },
+            { value: "suspended", label: "Suspended" },
+            { value: "left", label: "Removed" },
+          ]}
+        />
+        <form
+          className="flex w-full gap-2 sm:w-auto"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPage(1);
+            setAppliedSearch(search.trim());
+          }}
+        >
+          <div className="relative flex-1 sm:w-72">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-500" aria-hidden />
+            <Input aria-label="Search members" placeholder="Search name or email…" className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Button type="submit" variant="secondary">Search</Button>
+        </form>
       </div>
 
-      <Modal open={Boolean(selected)} onClose={() => setSelected(null)} size="sm">
-        {selected && (
-          <div className="space-y-4">
-            <div className="pb-3 border-b border-gray-100 pr-6">
-              <h4 className="text-sm font-black text-gray-900">Manage: {memberName(selected)}</h4>
-              <p className="text-[11px] text-gray-500 mt-0.5">{selected.email}</p>
+      <Panel>
+        <DataTable
+          caption="Agency members"
+          columns={columns}
+          rows={members.data?.items}
+          rowKey={(m) => m.membershipId}
+          loading={members.isPending}
+          error={members.isError ? (members.error instanceof Error ? members.error.message : "Could not load members.") : undefined}
+          onRetry={() => void members.refetch()}
+          empty={{ title: "No members in this view", description: "Invite a colleague to get started.", action: <Button icon={<Users className="size-4" aria-hidden />} onClick={() => setInviteOpen(true)}>Invite member</Button> }}
+        />
+        <Pagination page={page} pageCount={pageCount} onChange={setPage} total={members.data?.total} pageSize={PAGE_SIZE} />
+      </Panel>
+
+      <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <BulkInviteDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
+
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected ? `Manage ${memberName(selected)}` : "Manage member"}
+        description="Membership changes are recorded in the agency audit log."
+      >
+        {selected ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl bg-canvas-soft p-4 text-sm">
+              <p className="font-semibold text-ink-900">{selected.user.email}</p>
+              <p className="mt-1 text-ink-600">Status: <span className="capitalize">{selected.membershipStatus}</span> · Joined {selected.joinedAt ? relativeDays(selected.joinedAt) : "pending"}</p>
             </div>
-            <div>
-              <label htmlFor="member-role" className="text-xs font-bold text-gray-700 block mb-1">
-                Role
-              </label>
-              <select
-                id="member-role"
-                value={selected.role}
-                disabled={update.isPending}
-                onChange={(e) => run({ role: e.target.value }, `Role updated for ${memberName(selected)}.`)}
-                className={inputCls}
-              >
-                <option value="learner">Learner</option>
-                <option value="agency_admin">Agency Admin</option>
-              </select>
-            </div>
-            <div className="space-y-2 text-xs">
-              {selected.status === "active" && (
-                <button
-                  type="button"
-                  disabled={update.isPending}
-                  onClick={() => run({ status: "suspended" }, `${memberName(selected)} suspended.`)}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-gray-50 font-bold text-amber-700 border border-gray-100"
+
+            <form
+              className="space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void setEmployeeReference.run(selected.membershipId, reference.trim() || null).then((ok) => {
+                  if (ok === undefined) return;
+                  setSelected(null);
+                });
+              }}
+            >
+              <Field label="Employee reference" hint="Optional internal identifier, for example an employee number.">
+                {({ id, describedBy }) => (
+                  <Input id={id} aria-describedby={describedBy} value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} placeholder="EMP-1042" />
+                )}
+              </Field>
+              <Button type="submit" variant="secondary" loading={setEmployeeReference.pending}>Save reference</Button>
+            </form>
+
+            <div className="space-y-2 border-t border-line pt-4">
+              {selected.membershipStatus === "active" ? (
+                <Button
+                  variant="secondary"
+                  className="w-full justify-start"
+                  loading={setMemberStatus.pending}
+                  onClick={() => void setMemberStatus.run(selected.membershipId, "suspend").then((ok) => ok !== undefined && setSelected(null))}
                 >
                   Suspend member
-                </button>
-              )}
-              {selected.status === "suspended" && (
-                <button
-                  type="button"
-                  disabled={update.isPending}
-                  onClick={() => run({ status: "active" }, `${memberName(selected)} reactivated.`)}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-gray-50 font-bold text-primary-900 border border-gray-100"
+                </Button>
+              ) : selected.membershipStatus === "suspended" ? (
+                <Button
+                  variant="secondary"
+                  className="w-full justify-start"
+                  loading={setMemberStatus.pending}
+                  onClick={() => void setMemberStatus.run(selected.membershipId, "reactivate").then((ok) => ok !== undefined && setSelected(null))}
                 >
                   Reactivate member
-                </button>
-              )}
-              {selected.status !== "left" && (
-                <button
-                  type="button"
-                  disabled={update.isPending}
+                </Button>
+              ) : null}
+              {selected.membershipStatus !== "left" ? (
+                <Button
+                  variant="danger"
+                  className="w-full justify-start"
+                  loading={setMemberStatus.pending}
                   onClick={() => {
-                    if (window.confirm(`Remove ${memberName(selected)} from the agency?`)) {
-                      run({ status: "removed" }, `${memberName(selected)} removed.`);
-                    }
+                    if (!window.confirm(`Remove ${memberName(selected)} from the agency? Their seats will be released.`)) return;
+                    void setMemberStatus.run(selected.membershipId, "remove").then((ok) => ok !== undefined && setSelected(null));
                   }}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-red-50 font-bold text-red-700 border border-gray-100"
                 >
                   Remove from agency
-                </button>
-              )}
+                </Button>
+              ) : null}
             </div>
           </div>
-        )}
+        ) : null}
       </Modal>
-    </AgencyPage>
+    </>
   );
 }

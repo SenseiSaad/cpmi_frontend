@@ -1,258 +1,236 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
-import { EmptyState, ErrorState, LoadingState, errorMessage } from "@/components/shared/QueryState";
-import { platformApi } from "@/features/platform/api";
-import {
-  AdminPage,
-  btnDark,
-  btnLight,
-  Field,
-  formatDate,
-  Modal,
-  Notice,
-  Pager,
-  Panel,
-  StatusPill,
-  tdClass,
-  thClass,
-  useFlash
-} from "@/features/platform/ui";
+import { Building2, Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
-const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+import { PageHeader } from "@/components/layout/page-header";
+import { StatusPill } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Field, Input } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
+import { Panel } from "@/components/ui/panel";
+import { Pagination } from "@/components/ui/pagination";
+import { api } from "@/lib/api";
+import { useAction, useAgencies } from "@/lib/api/hooks";
+import type { AgencySummary } from "@/lib/api/types";
+import { formatNumber, relativeDays } from "@/lib/utils";
+
+const PAGE_SIZE = 10;
 
 function slugify(value: string): string {
   return value
     .toLowerCase()
+    .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 100);
 }
 
 export default function AdminAgenciesPage() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const flash = useFlash();
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({ legalName: "", displayName: "", slug: "", billingEmail: "" });
 
-  const agencies = useQuery({
-    queryKey: ["platform", "agencies", { page, search }],
-    queryFn: () => platformApi.agencies({ page, pageSize: 25, q: search.trim() || undefined })
+  const query = useAgencies({ search: appliedSearch || undefined, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+  const create = useAction(api.platform.createAgency, {
+    invalidate: ["agencies"],
+    success: "Agency created",
   });
+  const setStatus = useAction(api.platform.setAgencyStatus, { invalidate: ["agencies"] });
 
-  const setStatus = useMutation({
-    mutationFn: (input: { uuid: string; status: "active" | "suspended" }) => platformApi.setAgencyStatus(input.uuid, input.status),
-    onSuccess: async () => {
-      flash.success("Agency status updated.");
-      await queryClient.invalidateQueries({ queryKey: ["platform", "agencies"] });
-    },
-    onError: (error) => flash.error(errorMessage(error))
-  });
+  const pageCount = Math.max(1, Math.ceil((query.data?.total ?? 0) / PAGE_SIZE));
+
+  const columns = useMemo<Column<AgencySummary>[]>(
+    () => [
+      {
+        key: "name",
+        header: "Agency",
+        width: "minmax(0,2fr)",
+        cell: (a) => (
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-ink-900">{a.displayName}</p>
+            <p className="truncate font-mono text-xs text-ink-600">{a.slug}</p>
+          </div>
+        ),
+      },
+      {
+        key: "members",
+        header: "Members",
+        width: "100px",
+        align: "right",
+        cell: (a) => <span className="tnum font-semibold">{formatNumber(a.memberCount)}</span>,
+      },
+      {
+        key: "seats",
+        header: "Seats",
+        width: "120px",
+        align: "right",
+        cell: (a) => (
+          <span className="tnum font-semibold">
+            {formatNumber(a.seatsUsed)}
+            <span className="font-normal text-ink-500"> / {formatNumber(a.seatCapacity)}</span>
+          </span>
+        ),
+      },
+      { key: "status", header: "Status", width: "120px", cell: (a) => <StatusPill status={a.status} /> },
+      { key: "created", header: "Onboarded", width: "130px", cell: (a) => <span className="text-ink-600">{a.createdAt ? relativeDays(a.createdAt) : "—"}</span> },
+      {
+        key: "actions",
+        header: "Actions",
+        width: "140px",
+        align: "right",
+        cell: (a) =>
+          a.status === "closed" ? (
+            <span className="text-xs text-ink-500">Closed</span>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void setStatus.run(a.publicId, a.status === "suspended" ? "active" : "suspended")}
+            >
+              {a.status === "suspended" ? "Reactivate" : "Suspend"}
+            </Button>
+          ),
+      },
+    ],
+    [setStatus],
+  );
+
+  function submitCreate(event: React.FormEvent) {
+    event.preventDefault();
+    const displayName = form.displayName.trim();
+    const legalName = form.legalName.trim() || displayName;
+    const slug = form.slug.trim() || slugify(displayName);
+    if (!displayName || !slug) return;
+    void create
+      .run({
+        displayName,
+        legalName,
+        slug,
+        ...(form.billingEmail.trim() ? { billingEmail: form.billingEmail.trim() } : {}),
+      })
+      .then((result) => {
+        if (!result) return;
+        setCreateOpen(false);
+        setForm({ legalName: "", displayName: "", slug: "", billingEmail: "" });
+      });
+  }
 
   return (
-    <AdminPage title="Government Agencies Directory" subtitle="Provision agencies, invite agency administrators and manage tenant status">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200/90 shadow-xs">
-        <div className="relative w-full sm:w-80">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            aria-label="Search agencies"
-            placeholder="Search by name or slug…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="input pl-10"
-          />
-        </div>
-        <button type="button" onClick={() => setCreateOpen(true)} className={btnDark}>
-          <Plus size={14} className="text-secondary-400" /> Onboard new agency
-        </button>
-      </div>
+    <>
+      <PageHeader
+        eyebrow="Platform"
+        title="Agencies"
+        subtitle="Provision tenants, monitor membership and manage access."
+        actions={
+          <Button icon={<Plus className="size-4" aria-hidden />} onClick={() => setCreateOpen(true)}>
+            New agency
+          </Button>
+        }
+      />
 
-      {flash.node}
+      <Panel>
+        <form
+          className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPage(1);
+            setAppliedSearch(search.trim());
+          }}
+        >
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-500" aria-hidden />
+            <Input
+              aria-label="Search agencies"
+              placeholder="Search by name or slug…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button type="submit" variant="secondary">Search</Button>
+          {appliedSearch ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSearch("");
+                setAppliedSearch("");
+                setPage(1);
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
+          <span className="tnum ml-auto text-sm text-ink-600">{formatNumber(query.data?.total ?? 0)} agencies</span>
+        </form>
 
-      <Panel title="Agencies" description="Seat usage counts active seat assignments">
-        {agencies.isPending ? (
-          <LoadingState />
-        ) : agencies.isError ? (
-          <ErrorState error={agencies.error} onRetry={() => void agencies.refetch()} />
-        ) : agencies.data.items.length === 0 ? (
-          <EmptyState title={search ? "No agencies match your search" : "No agencies yet"} />
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
-                    <th className={thClass}>Agency</th>
-                    <th className={thClass}>Slug</th>
-                    <th className={thClass}>Status</th>
-                    <th className={`${thClass} text-right`}>Members</th>
-                    <th className={`${thClass} text-right`}>Seats used</th>
-                    <th className={thClass}>Created</th>
-                    <th className={`${thClass} text-right`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                  {agencies.data.items.map((agency) => (
-                    <tr key={agency.uuid} className="hover:bg-gray-50/80">
-                      <td className={`${tdClass} font-bold text-gray-900`}>
-                        <Link href={`/admin/agencies/${agency.uuid}`} className="hover:underline">
-                          {agency.name}
-                        </Link>
-                      </td>
-                      <td className={`${tdClass} font-mono text-[11px]`}>{agency.slug ?? "—"}</td>
-                      <td className={tdClass}>
-                        <StatusPill status={agency.status} />
-                      </td>
-                      <td className={`${tdClass} text-right tabular-nums`}>{agency.member_count ?? "—"}</td>
-                      <td className={`${tdClass} text-right tabular-nums`}>{agency.seats_used ?? "—"}</td>
-                      <td className={`${tdClass} text-gray-400`}>{formatDate(agency.created_at)}</td>
-                      <td className={`${tdClass} text-right whitespace-nowrap space-x-2`}>
-                        {agency.status === "active" ? (
-                          <button
-                            type="button"
-                            className={btnLight}
-                            disabled={setStatus.isPending}
-                            onClick={() => {
-                              if (window.confirm(`Suspend ${agency.name}? All members lose access until reactivated.`)) {
-                                setStatus.mutate({ uuid: agency.uuid, status: "suspended" });
-                              }
-                            }}
-                          >
-                            Suspend
-                          </button>
-                        ) : agency.status === "suspended" ? (
-                          <button
-                            type="button"
-                            className={btnLight}
-                            disabled={setStatus.isPending}
-                            onClick={() => setStatus.mutate({ uuid: agency.uuid, status: "active" })}
-                          >
-                            Reactivate
-                          </button>
-                        ) : null}
-                        <Link href={`/admin/agencies/${agency.uuid}`} className="text-primary-700 hover:text-primary-900 font-bold hover:underline">
-                          Manage
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pager page={agencies.data.page} pages={agencies.data.pages} total={agencies.data.total} onChange={setPage} />
-          </>
-        )}
+        <DataTable
+          caption="Agencies"
+          columns={columns}
+          rows={query.data?.items}
+          rowKey={(a) => a.publicId}
+          loading={query.isPending}
+          error={query.isError ? (query.error instanceof Error ? query.error.message : "Could not load agencies.") : undefined}
+          onRetry={() => void query.refetch()}
+          empty={{
+            title: appliedSearch ? "No agencies match that search" : "No agencies yet",
+            description: appliedSearch ? "Try a different name or slug." : "Create the first agency to get started.",
+          }}
+        />
+        <Pagination page={page} pageCount={pageCount} onChange={setPage} total={query.data?.total} pageSize={PAGE_SIZE} />
       </Panel>
 
-      <CreateAgencyModal
+      <Modal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={async (publicId) => {
-          setCreateOpen(false);
-          await queryClient.invalidateQueries({ queryKey: ["platform", "agencies"] });
-          router.push(`/admin/agencies/${publicId}`);
-        }}
-      />
-    </AdminPage>
-  );
-}
-
-function CreateAgencyModal({
-  open,
-  onClose,
-  onCreated
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (publicId: string) => void | Promise<void>;
-}) {
-  const [legalName, setLegalName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [billingEmail, setBillingEmail] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const create = useMutation({
-    mutationFn: () =>
-      platformApi.createAgency({
-        legalName: legalName.trim(),
-        displayName: displayName.trim(),
-        slug,
-        billingEmail: billingEmail.trim() || undefined
-      }),
-    onSuccess: async (result) => {
-      setLegalName("");
-      setDisplayName("");
-      setSlug("");
-      setSlugTouched(false);
-      setBillingEmail("");
-      await onCreated(result.agency.publicId);
-    },
-    onError: (error) => setFormError(errorMessage(error))
-  });
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!legalName.trim() || !displayName.trim()) return setFormError("Legal and display names are required.");
-    if (slug.length < 2 || !SLUG.test(slug)) return setFormError("Slug must be lowercase letters, numbers and single hyphens.");
-    setFormError(null);
-    create.mutate();
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="Onboard new agency" description="Creates the tenant. Invite its administrator on the next screen.">
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="Legal name" htmlFor="agency-legal">
-          <input id="agency-legal" className="input" value={legalName} maxLength={200} onChange={(e) => setLegalName(e.target.value)} />
-        </Field>
-        <Field label="Display name" htmlFor="agency-display">
-          <input
-            id="agency-display"
-            className="input"
-            value={displayName}
-            maxLength={200}
-            onChange={(e) => {
-              setDisplayName(e.target.value);
-              if (!slugTouched) setSlug(slugify(e.target.value));
-            }}
-          />
-        </Field>
-        <Field label="Slug" htmlFor="agency-slug" hint="Lowercase, e.g. texas-dot. Cannot be changed later.">
-          <input
-            id="agency-slug"
-            className="input font-mono"
-            value={slug}
-            maxLength={100}
-            onChange={(e) => {
-              setSlugTouched(true);
-              setSlug(e.target.value.toLowerCase());
-            }}
-          />
-        </Field>
-        <Field label="Billing email (optional)" htmlFor="agency-billing">
-          <input id="agency-billing" type="email" className="input" value={billingEmail} maxLength={320} onChange={(e) => setBillingEmail(e.target.value)} />
-        </Field>
-        {formError && <Notice tone="error">{formError}</Notice>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className={btnLight} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className={btnDark} disabled={create.isPending}>
-            {create.isPending ? "Creating…" : "Create agency"}
-          </button>
-        </div>
-      </form>
-    </Modal>
+        title="New agency"
+        description="Creates a tenant. Invite its first administrator from the agency's team page afterwards."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button type="submit" form="new-agency-form" loading={create.pending} icon={<Building2 className="size-4" aria-hidden />}>
+              Create agency
+            </Button>
+          </>
+        }
+      >
+        <form id="new-agency-form" className="space-y-4" onSubmit={submitCreate}>
+          <Field label="Display name">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                data-autofocus
+                required
+                value={form.displayName}
+                onChange={(e) => {
+                  const displayName = e.target.value;
+                  setForm((f) => ({ ...f, displayName, slug: f.slug || slugify(displayName) }));
+                }}
+                placeholder="Texas Department of Transportation"
+              />
+            )}
+          </Field>
+          <Field label="Legal name" optional>
+            {({ id, describedBy }) => (
+              <Input id={id} aria-describedby={describedBy} value={form.legalName} onChange={(e) => setForm((f) => ({ ...f, legalName: e.target.value }))} placeholder="Texas DOT" />
+            )}
+          </Field>
+          <Field label="Slug" hint="Lowercase letters, numbers and single hyphens. Used in report filenames.">
+            {({ id, describedBy }) => (
+              <Input id={id} aria-describedby={describedBy} required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} placeholder="texas-dot" />
+            )}
+          </Field>
+          <Field label="Billing email" optional>
+            {({ id, describedBy }) => (
+              <Input id={id} aria-describedby={describedBy} type="email" value={form.billingEmail} onChange={(e) => setForm((f) => ({ ...f, billingEmail: e.target.value }))} placeholder="billing@agency.gov" />
+            )}
+          </Field>
+        </form>
+      </Modal>
+    </>
   );
 }

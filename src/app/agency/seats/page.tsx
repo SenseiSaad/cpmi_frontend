@@ -1,245 +1,264 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Armchair, Plus } from "lucide-react";
-import {
-  agencyApi,
-  agencyApiExt,
-  agencyKeys,
-  formatDate,
-  memberName,
-  useAgencyMembers,
-  useAgencyScope,
-  type AgencyEntitlement,
-  type AgencySeat
-} from "@/features/agency/api";
-import { AgencyPage, Banner, Modal, Panel, ProgressBar, StatusPill, primaryBtn, outlineBtn, inputCls, thCls } from "@/features/agency/ui";
-import { ErrorState, LoadingState, EmptyState, errorMessage } from "@/components/shared/QueryState";
+import { ArrowLeftRight, Ticket, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-type Dialog = { kind: "assign"; entitlement: AgencyEntitlement } | { kind: "reassign"; seat: AgencySeat } | null;
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Field, Select } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { ProgressBar } from "@/components/ui/progress";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { api } from "@/lib/api";
+import { useAction, useAllMembers, useEntitlements, useSeats } from "@/lib/api/hooks";
+import type { Seat } from "@/lib/api/types";
+import { formatNumber, relativeDays } from "@/lib/utils";
+
+function memberLabel(seat: Seat): string {
+  if (!seat.member) return "Unassigned";
+  return `${seat.member.firstName} ${seat.member.lastName}`.trim() || seat.member.email;
+}
 
 export default function AgencySeatsPage() {
-  const { agencyId } = useAgencyScope();
-  const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<Dialog>(null);
-  const [memberId, setMemberId] = useState("");
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const entitlements = useEntitlements();
+  const members = useAllMembers();
+  const [entitlementId, setEntitlementId] = useState<string | null>(null);
+  const seats = useSeats(entitlementId);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignMembership, setAssignMembership] = useState("");
+  const [reassignSeat, setReassignSeat] = useState<Seat | null>(null);
+  const [reassignMembership, setReassignMembership] = useState("");
 
-  const entitlements = useQuery({
-    queryKey: agencyKeys.entitlements(agencyId),
-    queryFn: () => agencyApi.entitlements(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const seats = useQuery({
-    queryKey: agencyKeys.seats(agencyId),
-    queryFn: () => agencyApiExt.seats(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const members = useAgencyMembers({ page: 1, pageSize: 100 });
-  const activeMembers = (members.data?.items ?? []).filter((m) => m.status === "active");
+  const assign = useAction(api.seats.assign, { invalidate: ["entitlements", "seats", "agency-overview"], success: "Seat assigned" });
+  const release = useAction(api.seats.release, { invalidate: ["entitlements", "seats", "agency-overview"], success: "Seat released" });
+  const reassign = useAction(api.seats.reassign, { invalidate: ["entitlements", "seats", "agency-overview"], success: "Seat reassigned" });
 
-  const refresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: agencyKeys.entitlements(agencyId) }),
-      queryClient.invalidateQueries({ queryKey: agencyKeys.seats(agencyId) }),
-      queryClient.invalidateQueries({ queryKey: ["agency", agencyId, "reports"] })
-    ]);
-  };
+  const entitlementList = entitlements.data ?? [];
 
-  const onError = (err: unknown) => setNotice({ tone: "error", text: errorMessage(err) });
-  const closeDialog = () => {
-    setDialog(null);
-    setMemberId("");
-  };
+  useEffect(() => {
+    if (entitlementId) return;
+    const first = entitlementList.find((ent) => ent.status === "active") ?? entitlementList[0];
+    if (first) setEntitlementId(first.id);
+  }, [entitlementId, entitlementList]);
 
-  const assign = useMutation({
-    mutationFn: ({ entitlementId, membershipId }: { entitlementId: string; membershipId: string }) =>
-      agencyApiExt.assignSeat(agencyId as string, entitlementId, membershipId),
-    onSuccess: async () => {
-      setNotice({ tone: "success", text: "Seat assigned." });
-      closeDialog();
-      await refresh();
-    }
-  });
-  const release = useMutation({
-    mutationFn: (seat: AgencySeat) => agencyApi.releaseSeat(agencyId as string, seat.entitlement.uuid, seat.uuid),
-    onSuccess: async () => {
-      setNotice({ tone: "success", text: "Seat released." });
-      await refresh();
-    },
-    onError
-  });
-  const reassign = useMutation({
-    mutationFn: ({ seat, membershipId }: { seat: AgencySeat; membershipId: string }) =>
-      agencyApi.reassignSeat(agencyId as string, seat.entitlement.uuid, seat.uuid, membershipId),
-    onSuccess: async () => {
-      setNotice({ tone: "success", text: "Seat reassigned." });
-      closeDialog();
-      await refresh();
-    }
-  });
+  const selected = entitlementList.find((ent) => ent.id === entitlementId) ?? null;
+  const activeMembers = useMemo(() => (members.data ?? []).filter((m) => m.membershipStatus === "active"), [members.data]);
 
-  const entitlementIdOf = dialog?.kind === "assign" ? dialog.entitlement.uuid : dialog?.kind === "reassign" ? dialog.seat.entitlement.uuid : null;
-  const holders = new Set(
-    (seats.data?.items ?? []).filter((s) => s.entitlement.uuid === entitlementIdOf).map((s) => s.learner.membership_id)
+  const columns = useMemo<Column<Seat>[]>(
+    () => [
+      { key: "slot", header: "Slot", width: "70px", cell: (seat) => <span className="tnum font-bold text-ink-900">#{seat.slotNo}</span> },
+      {
+        key: "member",
+        header: "Assigned to",
+        width: "minmax(0,2fr)",
+        cell: (seat) =>
+          seat.member ? (
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-ink-900">{memberLabel(seat)}</p>
+              <p className="truncate font-mono text-xs text-ink-600">{seat.member.email}</p>
+            </div>
+          ) : (
+            <span className="text-sm text-ink-500">Unassigned</span>
+          ),
+      },
+      { key: "assigned", header: "Assigned", width: "130px", cell: (seat) => <span className="text-ink-600">{seat.assignedAt ? relativeDays(seat.assignedAt) : "—"}</span> },
+      {
+        key: "actions",
+        header: "Actions",
+        width: "190px",
+        align: "right",
+        cell: (seat) => (
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<ArrowLeftRight className="size-3.5" aria-hidden />}
+              onClick={() => {
+                setReassignSeat(seat);
+                setReassignMembership("");
+              }}
+            >
+              Reassign
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={release.pending}
+              onClick={() => {
+                if (!entitlementId || !seat.assignmentId) return;
+                if (!window.confirm(`Release seat #${seat.slotNo} from ${memberLabel(seat)}?`)) return;
+                void release.run(entitlementId, seat.assignmentId);
+              }}
+            >
+              Release
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [entitlementId, release],
   );
-  const candidates = activeMembers.filter((m) => !holders.has(m.uuid));
-  const pending = assign.isPending || reassign.isPending;
-  const dialogError = assign.error ?? reassign.error;
 
   return (
-    <AgencyPage title="Seat Licenses">
-      <div className="space-y-6">
-        {notice && (
-          <Banner tone={notice.tone} onClose={() => setNotice(null)}>
-            {notice.text}
-          </Banner>
-        )}
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Seats"
+        subtitle="Assign licensed seats to active members and reassign them when staff changes."
+        actions={<ButtonLink href="/agency/store" variant="primary" icon={<Ticket className="size-4" aria-hidden />}>Buy more seats</ButtonLink>}
+      />
 
-        <Panel title="Entitlements" action={<Link href="/agency/catalogue" className={primaryBtn}><Plus size={14} className="text-secondary-400" /> Purchase Seats</Link>}>
-          {entitlements.isLoading ? (
-            <LoadingState />
-          ) : entitlements.isError ? (
-            <ErrorState error={entitlements.error} onRetry={() => entitlements.refetch()} />
-          ) : !entitlements.data?.items.length ? (
-            <EmptyState title="No seat licenses yet" description="Purchase seats from the catalogue to start assigning training." />
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-4">
-              {entitlements.data.items.map((e) => {
-                const free = Math.max(0, e.seats_total - e.seats_assigned);
-                return (
-                  <div key={e.uuid} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-black text-gray-900">{e.product?.name}</p>
-                        <p className="text-[11px] text-gray-500">Valid until {formatDate(e.expires_at)}</p>
-                      </div>
-                      <StatusPill status={e.status} />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div><span className="text-[10px] font-bold text-gray-400 uppercase">Total</span><p className="text-xl font-black text-primary-950">{e.seats_total}</p></div>
-                      <div><span className="text-[10px] font-bold text-gray-400 uppercase">Assigned</span><p className="text-xl font-black text-gray-900">{e.seats_assigned}</p></div>
-                      <div><span className="text-[10px] font-bold text-gray-400 uppercase">Available</span><p className="text-xl font-black text-highlight-600">{free}</p></div>
-                    </div>
-                    <ProgressBar value={e.seats_total ? (e.seats_assigned / e.seats_total) * 100 : 0} />
-                    <button
-                      type="button"
-                      className={`${outlineBtn} w-full`}
-                      disabled={free === 0 || e.status !== "active"}
-                      onClick={() => {
-                        assign.reset();
-                        setDialog({ kind: "assign", entitlement: e });
-                      }}
-                    >
-                      <Armchair size={14} /> Assign Seat
-                    </button>
+      {entitlements.isError ? (
+        <Panel><ErrorState message={entitlements.error instanceof Error ? entitlements.error.message : undefined} onRetry={() => void entitlements.refetch()} /></Panel>
+      ) : entitlements.isPending ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-40" />)}</div>
+      ) : entitlementList.length === 0 ? (
+        <Panel>
+          <div className="py-10 text-center">
+            <p className="text-lg font-bold text-ink-900">No seat entitlements yet</p>
+            <p className="mt-1 text-sm text-ink-600">Purchase a program to create a seat pool for your agency.</p>
+            <ButtonLink href="/agency/store" className="mt-5">Visit the store</ButtonLink>
+          </div>
+        </Panel>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {entitlementList.map((ent) => {
+              const active = ent.id === entitlementId;
+              const pct = ent.seatCapacity > 0 ? (ent.seatsUsed / ent.seatCapacity) * 100 : 0;
+              return (
+                <button
+                  key={ent.id}
+                  type="button"
+                  onClick={() => setEntitlementId(ent.id)}
+                  aria-pressed={active}
+                  className={`rounded-3xl p-5 text-left shadow-card ring-1 transition-all ${active ? "bg-white ring-2 ring-brand-700" : "bg-white ring-navy-900/[0.04] hover:ring-navy-300"}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-ink-900">{ent.productName}</p>
+                    <StatusPill status={ent.status} />
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </Panel>
+                  <p className="tnum mt-3 text-2xl font-extrabold text-ink-900">
+                    {formatNumber(ent.seatsUsed)} <span className="text-base font-medium text-ink-500">/ {formatNumber(ent.seatCapacity)} seats</span>
+                  </p>
+                  <ProgressBar value={pct} label={`${ent.productName} seats used`} className="mt-2" />
+                  <p className="mt-2 text-xs text-ink-600">Valid until {ent.validUntil ? new Date(ent.validUntil).toLocaleDateString() : "—"}</p>
+                </button>
+              );
+            })}
+          </div>
 
-        <Panel title="Assigned Seats">
-          {seats.isLoading ? (
-            <LoadingState />
-          ) : seats.isError ? (
-            <ErrorState error={seats.error} onRetry={() => seats.refetch()} />
-          ) : !seats.data?.items.length ? (
-            <EmptyState title="No seats assigned yet" />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className={`${thCls} pl-2`}>Learner</th>
-                    <th className={thCls}>Product</th>
-                    <th className={thCls}>Assigned</th>
-                    <th className={`${thCls} text-right pr-2`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                  {seats.data.items.map((s) => (
-                    <tr key={s.uuid} className="hover:bg-gray-50/70">
-                      <td className="py-4 pl-2">
-                        <p className="font-bold text-gray-900">{memberName(s.learner)}</p>
-                        <p className="font-mono text-[10px] text-gray-500">{s.learner.email}</p>
-                      </td>
-                      <td className="py-4">{s.entitlement.name}</td>
-                      <td className="py-4 text-gray-500">{formatDate(s.assigned_at)}</td>
-                      <td className="py-4 text-right pr-2 space-x-3">
-                        <button
-                          type="button"
-                          className="text-xs font-bold text-primary-800 hover:underline"
-                          onClick={() => {
-                            reassign.reset();
-                            setDialog({ kind: "reassign", seat: s });
-                          }}
-                        >
-                          Reassign
-                        </button>
-                        <button
-                          type="button"
-                          disabled={release.isPending}
-                          className="text-xs font-bold text-red-600 hover:underline disabled:opacity-50"
-                          onClick={() => window.confirm(`Release the seat held by ${memberName(s.learner)}?`) && release.mutate(s)}
-                        >
-                          Release
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      </div>
+          <Panel className="mt-6">
+            <PanelHeader
+              title={selected ? `${selected.productName} — assigned seats` : "Assigned seats"}
+              description={selected ? `${formatNumber(selected.seatsUsed)} of ${formatNumber(selected.seatCapacity)} seats assigned.` : undefined}
+              action={
+                <Button
+                  icon={<UserPlus className="size-4" aria-hidden />}
+                  disabled={!selected || selected.status !== "active" || selected.seatsUsed >= selected.seatCapacity}
+                  onClick={() => {
+                    setAssignMembership("");
+                    setAssignOpen(true);
+                  }}
+                >
+                  Assign seat
+                </Button>
+              }
+            />
+            <DataTable
+              caption="Seat assignments"
+              columns={columns}
+              rows={seats.data}
+              rowKey={(seat) => seat.assignmentId ?? `slot-${seat.slotNo}`}
+              loading={seats.isPending}
+              error={seats.isError ? (seats.error instanceof Error ? seats.error.message : "Could not load seats.") : undefined}
+              onRetry={() => void seats.refetch()}
+              empty={{ title: "No seats assigned", description: "Assign a licensed seat to an active member of your team." }}
+            />
+          </Panel>
+        </>
+      )}
 
-      <Modal open={Boolean(dialog)} onClose={closeDialog}>
-        {dialog && (
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!memberId) return;
-              if (dialog.kind === "assign") assign.mutate({ entitlementId: dialog.entitlement.uuid, membershipId: memberId });
-              else reassign.mutate({ seat: dialog.seat, membershipId: memberId });
-            }}
-          >
-            <h3 className="text-lg font-black text-gray-900">{dialog.kind === "assign" ? "Assign Seat" : "Reassign Seat"}</h3>
-            <p className="text-xs text-gray-500">
-              {dialog.kind === "assign"
-                ? `Assign a ${dialog.entitlement.product?.name ?? ""} seat to an active member.`
-                : `Move the seat held by ${memberName(dialog.seat.learner)} to another active member.`}
-            </p>
-            {dialogError && <Banner tone="error">{errorMessage(dialogError)}</Banner>}
-            <div>
-              <label htmlFor="seat-member" className="text-xs font-bold text-gray-700 block mb-1">Member</label>
-              {members.isLoading ? (
-                <LoadingState label="Loading members…" />
-              ) : (
-                <select id="seat-member" required value={memberId} onChange={(e) => setMemberId(e.target.value)} className={inputCls}>
-                  <option value="">Select a member…</option>
-                  {candidates.map((m) => (
-                    <option key={m.uuid} value={m.uuid}>
-                      {memberName(m)} ({m.email})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="pt-2 flex items-center justify-end gap-3">
-              <button type="button" onClick={closeDialog} className="px-4 py-2.5 text-xs font-bold text-gray-500">Cancel</button>
-              <button type="submit" disabled={!memberId || pending} className={primaryBtn}>
-                {pending ? "Saving..." : dialog.kind === "assign" ? "Assign" : "Reassign"}
-              </button>
-            </div>
-          </form>
-        )}
+      <Modal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        title="Assign a seat"
+        description={selected ? `${selected.productName} · ${selected.seatCapacity - selected.seatsUsed} seats available` : undefined}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAssignOpen(false)}>Cancel</Button>
+            <Button
+              loading={assign.pending}
+              disabled={!assignMembership}
+              onClick={() => {
+                if (!entitlementId || !assignMembership) return;
+                void assign.run(entitlementId, assignMembership).then((ok) => ok !== undefined && setAssignOpen(false));
+              }}
+            >
+              Assign seat
+            </Button>
+          </>
+        }
+      >
+        <Field label="Member">
+          {({ id }) => (
+            <Select id={id} data-autofocus value={assignMembership} onChange={(e) => setAssignMembership(e.target.value)}>
+              <option value="">Choose an active member…</option>
+              {activeMembers.map((member) => (
+                <option key={member.membershipId} value={member.membershipId}>
+                  {`${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email} — {member.user.email}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {members.isPending ? <p className="mt-2 text-xs text-ink-600">Loading members…</p> : null}
+        {members.isError ? <p className="mt-2 text-xs text-bad">Could not load members.</p> : null}
       </Modal>
-    </AgencyPage>
+
+      <Modal
+        open={!!reassignSeat}
+        onClose={() => setReassignSeat(null)}
+        title={reassignSeat ? `Reassign seat #${reassignSeat.slotNo}` : "Reassign seat"}
+        description={reassignSeat ? `Currently assigned to ${memberLabel(reassignSeat)}.` : undefined}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReassignSeat(null)}>Cancel</Button>
+            <Button
+              loading={reassign.pending}
+              disabled={!reassignMembership}
+              onClick={() => {
+                if (!entitlementId || !reassignSeat?.assignmentId || !reassignMembership) return;
+                void reassign.run(entitlementId, reassignSeat.assignmentId, reassignMembership).then((ok) => ok !== undefined && setReassignSeat(null));
+              }}
+            >
+              Reassign
+            </Button>
+          </>
+        }
+      >
+        <Field label="New member">
+          {({ id }) => (
+            <Select id={id} data-autofocus value={reassignMembership} onChange={(e) => setReassignMembership(e.target.value)}>
+              <option value="">Choose an active member…</option>
+              {activeMembers
+                .filter((member) => member.membershipId !== reassignSeat?.membershipId)
+                .map((member) => (
+                  <option key={member.membershipId} value={member.membershipId}>
+                    {`${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email} — {member.user.email}
+                  </option>
+                ))}
+            </Select>
+          )}
+        </Field>
+        <p className="mt-3 flex items-center gap-2 text-xs text-ink-600">
+          <Badge tone="warn">Heads up</Badge>
+          Reassigning releases the current holder immediately.
+        </p>
+      </Modal>
+    </>
   );
 }

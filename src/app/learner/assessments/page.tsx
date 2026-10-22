@@ -1,176 +1,147 @@
 "use client";
 
-import { useState } from "react";
+import { ClipboardCheck, Trophy } from "lucide-react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, Clock, CheckCircle, ArrowRight } from "lucide-react";
-import DashboardShell from "@/components/layout/DashboardShell";
-import { LearnerSidebar } from "@/components/layout/SidebarNav";
-import { EmptyState, ErrorState, LoadingState } from "@/components/shared/QueryState";
-import { learnerKeys, listAllAssessments, listEnrollments, type EnrollmentAssessment } from "@/features/learner/api";
-import { formatDate } from "@/features/learner/format";
+import { useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 
-function statusLabel(a: EnrollmentAssessment): string {
-  if (a.hasPassed) return `Passed • Best ${a.bestScorePercent ?? 0}%`;
-  if (a.inProgressAttemptId) return "Attempt in progress";
-  if (a.maxAttempts !== null && a.attemptsUsed >= a.maxAttempts) return "No attempts remaining";
-  if (a.bestScorePercent !== null) return `Best ${a.bestScorePercent}% • Retake available`;
-  if (new Date(a.availableFrom).getTime() > Date.now()) return `Opens ${formatDate(a.availableFrom)}`;
-  return `Due ${formatDate(a.enrollment.due_at)}`;
-}
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Panel } from "@/components/ui/panel";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { useAllAssessments, useEnrollments } from "@/lib/api/hooks";
+import type { EnrollmentAssessment } from "@/lib/api/learner";
 
-export default function AssessmentsPage() {
-  const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+export default function LearnerAssessmentsPage() {
+  const searchParams = useSearchParams();
+  const enrollmentFilter = searchParams.get("enrollment");
+  const enrollments = useEnrollments();
+  const assessments = useAllAssessments(enrollments.data);
 
-  const enrollmentsQ = useQuery({ queryKey: learnerKeys.enrollments, queryFn: listEnrollments });
-  const enrollments = enrollmentsQ.data ?? [];
-  const assessmentsQ = useQuery({
-    queryKey: [...learnerKeys.allAssessments, "with-completed", enrollments.map((e) => e.uuid).join(",")],
-    queryFn: () => listAllAssessments(enrollments),
-    enabled: enrollmentsQ.isSuccess,
-  });
-  const all = assessmentsQ.data ?? [];
-  const query = enrollmentsQ.isError ? enrollmentsQ : assessmentsQ;
-  const loading = enrollmentsQ.isLoading || (enrollmentsQ.isSuccess && assessmentsQ.isLoading);
+  const rows = useMemo(
+    () => (assessments.data ?? []).filter((row) => !enrollmentFilter || row.enrollment.uuid === enrollmentFilter),
+    [assessments.data, enrollmentFilter],
+  );
 
-  const filtered = all.filter((a) => {
-    if (filter === "completed") return a.hasPassed;
-    if (filter === "pending") return !a.hasPassed;
-    return true;
-  });
+  const columns: Column<EnrollmentAssessment>[] = [
+    {
+      key: "assessment",
+      header: "Assessment",
+      width: "minmax(0,2fr)",
+      cell: (row) => (
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-ink-900">{row.title}</p>
+          <p className="truncate text-xs text-ink-600">{row.enrollment.course.title}</p>
+        </div>
+      ),
+    },
+    { key: "kind", header: "Type", width: "100px", cell: (row) => <Badge tone="navy"><span className="capitalize">{row.kind}</span></Badge> },
+    {
+      key: "attempts",
+      header: "Attempts",
+      width: "110px",
+      align: "right",
+      cell: (row) => (
+        <span className="tnum text-ink-700">
+          {row.attemptsUsed}
+          {row.maxAttempts !== null ? ` / ${row.maxAttempts}` : ""}
+        </span>
+      ),
+    },
+    {
+      key: "best",
+      header: "Best score",
+      width: "110px",
+      align: "right",
+      cell: (row) => <span className="tnum font-semibold">{row.bestScorePercent === null ? "—" : `${row.bestScorePercent}%`}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      width: "140px",
+      cell: (row) =>
+        row.hasPassed ? (
+          <Badge tone="ok" dot>Passed</Badge>
+        ) : row.inProgressAttemptId ? (
+          <Badge tone="warn" dot>In progress</Badge>
+        ) : (
+          <Badge tone="neutral">Not started</Badge>
+        ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width: "130px",
+      align: "right",
+      cell: (row) => (
+        <ButtonLink
+          href={`/learner/assessments/${row.assessmentPublicId}?enrollment=${row.enrollment.uuid}`}
+          variant={row.hasPassed ? "secondary" : "primary"}
+          size="sm"
+        >
+          {row.hasPassed ? "Review" : row.inProgressAttemptId ? "Resume" : "Start"}
+        </ButtonLink>
+      ),
+    },
+  ];
 
   return (
-    <DashboardShell
-      sidebar={<LearnerSidebar />}
-      headerContent={
-        <div>
-          <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight">Assessments & Exams</h1>
-          <p className="text-xs text-gray-500">Rigorous randomized testing for accredited DBE compliance certification</p>
-        </div>
-      }
-    >
-      <div className="space-y-6">
-        {/* Filter Bar */}
-        <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs">
-          <div className="flex items-center gap-2">
-            <ClipboardList size={18} className="text-primary-700" />
-            <span className="text-xs font-bold text-gray-700">Official Evaluation Engine</span>
-          </div>
+    <>
+      <PageHeader
+        eyebrow="Learner"
+        title="Assessments"
+        subtitle="Module quizzes and final exams. Pass every required assessment to unlock your certificate."
+        actions={enrollmentFilter ? <ButtonLink href="/learner/assessments" variant="secondary" size="sm">Show all enrollments</ButtonLink> : null}
+      />
 
-          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-bold">
-            <button
-              onClick={() => setFilter("all")}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                filter === "all" ? "bg-white text-primary-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              All Tests
-            </button>
-            <button
-              onClick={() => setFilter("pending")}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                filter === "pending" ? "bg-white text-primary-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Pending
-            </button>
-            <button
-              onClick={() => setFilter("completed")}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                filter === "completed" ? "bg-white text-primary-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Passed
-            </button>
-          </div>
-        </div>
-
-        {loading && <LoadingState label="Loading assessments…" />}
-        {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} />}
-        {!loading && !query.isError && filtered.length === 0 && (
-          <EmptyState
-            title={all.length ? "Nothing here" : "No assessments yet"}
-            description={
-              all.length
-                ? "No assessments match this filter."
-                : "Assessments for your enrolled courses will appear here."
+      {enrollments.isError || assessments.isError ? (
+        <Panel>
+          <ErrorState
+            message={
+              (enrollments.error instanceof Error ? enrollments.error.message : undefined) ??
+              (assessments.error instanceof Error ? assessments.error.message : undefined)
             }
+            onRetry={() => {
+              void enrollments.refetch();
+              void assessments.refetch();
+            }}
           />
-        )}
+        </Panel>
+      ) : enrollments.isPending || assessments.isPending ? (
+        <Panel><Skeleton className="h-64 w-full" /></Panel>
+      ) : (
+        <Panel>
+          <DataTable
+            caption="Assessments"
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => `${row.enrollment.uuid}-${row.assessmentPublicId}`}
+            empty={{
+              title: "No assessments available",
+              description: "Assessments appear once your enrollment includes a published quiz or exam.",
+            }}
+          />
+        </Panel>
+      )}
 
-        {/* Assessment Cards */}
-        <div className="space-y-4">
-          {filtered.map((item) => {
-            const isCompleted = item.hasPassed;
-            const exhausted =
-              !item.hasPassed && !item.inProgressAttemptId && item.maxAttempts !== null && item.attemptsUsed >= item.maxAttempts;
-            return (
-              <motion.div
-                key={`${item.enrollment.uuid}:${item.assessmentPublicId}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs hover:shadow-sm transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6"
-              >
-                <div className="flex items-start gap-4">
-                  <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                      isCompleted
-                        ? "bg-emerald-50 text-highlight-600"
-                        : "bg-secondary-50 text-secondary-800"
-                    }`}
-                  >
-                    {isCompleted ? <CheckCircle size={22} /> : <Clock size={22} />}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isCompleted
-                            ? "bg-emerald-50 text-highlight-600"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {statusLabel(item)}
-                      </span>
-                      <span className="text-xs text-gray-400 font-medium">
-                        {item.kind === "final" ? "Final Exam" : "Module Assessment"} • Attempts {item.attemptsUsed}
-                        {item.maxAttempts !== null ? ` of ${item.maxAttempts}` : ""}
-                      </span>
-                    </div>
-
-                    <h3 className="text-base font-black text-gray-900">{item.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1 max-w-xl">{item.enrollment.course.title}</p>
-                  </div>
-                </div>
-
-                <div className="sm:self-center w-full sm:w-auto">
-                  <Link
-                    href={`/learner/assessments/${item.enrollment.uuid}?assessment=${item.assessmentPublicId}`}
-                    className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 font-bold px-6 py-2.5 rounded-xl text-xs transition-all ${
-                      isCompleted
-                        ? "border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        : "bg-[#152A13] hover:bg-primary-800 text-white shadow-xs"
-                    }`}
-                  >
-                    <span>
-                      {isCompleted || exhausted
-                        ? "View Results"
-                        : item.inProgressAttemptId
-                        ? "Resume Attempt"
-                        : item.attemptsUsed > 0
-                        ? "Retake Assessment"
-                        : "Take Assessment"}
-                    </span>
-                    <ArrowRight size={13} className="text-secondary-400" />
-                  </Link>
-                </div>
-              </motion.div>
-            );
-          })}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-3xl bg-canvas-soft p-5 ring-1 ring-line">
+          <Trophy className="size-5 text-brand-700" aria-hidden />
+          <p className="mt-3 text-sm font-semibold text-ink-900">Passing scores</p>
+          <p className="mt-1 text-sm text-ink-600">Each assessment has its own pass threshold, shown when you start an attempt. Your best graded score is kept.</p>
+        </div>
+        <div className="rounded-3xl bg-canvas-soft p-5 ring-1 ring-line">
+          <ClipboardCheck className="size-5 text-brand-700" aria-hidden />
+          <p className="mt-3 text-sm font-semibold text-ink-900">Attempt limits</p>
+          <p className="mt-1 text-sm text-ink-600">If an attempt limit applies it is shown on the assessment. Answers are saved as you go.</p>
         </div>
       </div>
-    </DashboardShell>
+
+      <p className="mt-4 text-xs text-ink-500">
+        Looking for course material? <Link href="/learner/courses" className="font-semibold text-brand-700 hover:underline">Open your courses</Link>.
+      </p>
+    </>
   );
 }

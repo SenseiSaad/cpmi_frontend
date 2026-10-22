@@ -1,135 +1,139 @@
 "use client";
 
+import { ArrowRight, MailPlus, Ticket, TrendingUp, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { UserPlus, ShoppingCart, BarChart3 } from "lucide-react";
-import { agencyApi, agencyKeys, memberName, useAgencyMembers, useAgencyScope } from "@/features/agency/api";
-import { AgencyPage, Panel, StatTile, StatusPill, ProgressBar, initials, primaryBtn, outlineBtn, thCls } from "@/features/agency/ui";
-import { ErrorState, LoadingState, EmptyState } from "@/components/shared/QueryState";
 
-const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${Math.round(v)}%`);
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { ProgressBar } from "@/components/ui/progress";
+import { StatCard } from "@/components/ui/stat-card";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { useAgencyOverview, useAgencyReport, useOrders } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import { formatCurrency, formatNumber, relativeDays } from "@/lib/utils";
 
 export default function AgencyDashboardPage() {
-  const { agencyId } = useAgencyScope();
-  const reports = useQuery({
-    queryKey: ["agency", agencyId, "reports"],
-    queryFn: () => agencyApi.reportsOverview(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const entitlements = useQuery({
-    queryKey: agencyKeys.entitlements(agencyId),
-    queryFn: () => agencyApi.entitlements(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const members = useAgencyMembers({ page: 1, pageSize: 5 });
-
-  const r = reports.data;
-  const seats = r?.seats;
-  const available = seats ? Math.max(0, seats.capacity - seats.assigned) : undefined;
+  const { user } = useSession();
+  const overview = useAgencyOverview(true);
+  const report = useAgencyReport(true);
+  const orders = useOrders({ limit: 5 });
 
   return (
-    <AgencyPage title="Agency Overview">
-      <div className="space-y-6">
-        {reports.isLoading ? (
-          <LoadingState />
-        ) : reports.isError ? (
-          <ErrorState error={reports.error} onRetry={() => reports.refetch()} />
-        ) : r ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatTile label="Assigned Seats" value={seats?.assigned ?? 0} sub={`${seats?.assigned ?? 0} of ${seats?.capacity ?? 0} used`} />
-            <StatTile label="Active Members" value={r.members.active} />
-            <StatTile label="Completion" value={pct(r.enrollments.completionPercent)} sub={`${r.enrollments.completed} of ${r.enrollments.total} enrollments`} />
-            <StatTile label="Available Seats" value={available ?? 0} sub="Ready for assignment" />
-            <StatTile label="In Progress" value={r.enrollments.inProgress} />
-            <StatTile label="Pass Rate" value={pct(r.assessments.passRatePercent)} sub={`${r.assessments.passed} of ${r.assessments.graded} graded`} />
-            <StatTile label="Avg Score" value={pct(r.assessments.averageScorePercent)} />
-            <StatTile label="Certificates" value={r.certificates.issued} sub={r.certificates.revoked ? `${r.certificates.revoked} revoked` : undefined} />
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title={user?.agency?.displayName ?? "Agency overview"}
+        subtitle="Membership, seat usage and recent purchases for your agency."
+        actions={
+          <>
+            <ButtonLink href="/agency/store" variant="primary" icon={<Ticket className="size-4" aria-hidden />}>Buy seats</ButtonLink>
+            <ButtonLink href="/agency/members" variant="secondary" icon={<UserPlus className="size-4" aria-hidden />}>Invite member</ButtonLink>
+          </>
+        }
+      />
+
+      {overview.isError ? (
+        <Panel><ErrorState message={overview.error instanceof Error ? overview.error.message : undefined} onRetry={() => void overview.refetch()} /></Panel>
+      ) : overview.isPending || !overview.data ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Active members" value={formatNumber(overview.data.members)} hint="Learners and administrators" icon={Users} tone="brand" />
+          <StatCard label="Pending invitations" value={formatNumber(overview.data.pending_invitations)} hint="Awaiting acceptance" icon={MailPlus} tone="warn" />
+          <StatCard label="Available seats" value={formatNumber(overview.data.seats_available)} hint="Ready to assign" icon={Ticket} tone="ok" />
+          <StatCard label="Orders (30 days)" value={formatNumber(overview.data.recent_orders)} hint="Purchases and invoices" icon={TrendingUp} tone="info" />
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-12">
+        <Panel className="lg:col-span-5">
+          <PanelHeader
+            title="Training activity"
+            description="Enrollment and assessment outcomes for your team."
+            action={<Link href="/agency/reports" className="text-sm font-semibold text-brand-700 hover:text-brand-800">Reports</Link>}
+          />
+          {report.isError ? (
+            <ErrorState message={report.error instanceof Error ? report.error.message : undefined} onRetry={() => void report.refetch()} />
+          ) : report.isPending || !report.data ? (
+            <div className="space-y-4">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-14" />)}</div>
+          ) : (
+            <div className="space-y-5">
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <span className="font-medium text-ink-700">Enrollments</span>
+                  <span className="tnum text-ink-600">{formatNumber(report.data.enrollments.completed)} / {formatNumber(report.data.enrollments.total)} completed</span>
+                </div>
+                <ProgressBar value={report.data.enrollments.completionPercent ?? 0} label="Enrollment completion" showValue />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-canvas-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Pass rate</p>
+                  <p className="tnum mt-1 text-2xl font-extrabold text-ink-900">{report.data.assessments.passRatePercent === null ? "—" : `${report.data.assessments.passRatePercent}%`}</p>
+                  <p className="text-xs text-ink-600">{formatNumber(report.data.assessments.graded)} graded attempts</p>
+                </div>
+                <div className="rounded-2xl bg-canvas-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Certificates</p>
+                  <p className="tnum mt-1 text-2xl font-extrabold text-ink-900">{formatNumber(report.data.certificates.issued)}</p>
+                  <p className="text-xs text-ink-600">{report.data.certificates.revoked} revoked</p>
+                </div>
+                <div className="rounded-2xl bg-canvas-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Seats assigned</p>
+                  <p className="tnum mt-1 text-2xl font-extrabold text-ink-900">{formatNumber(report.data.seats.assigned)}</p>
+                  <p className="text-xs text-ink-600">of {formatNumber(report.data.seats.capacity)}</p>
+                </div>
+                <div className="rounded-2xl bg-canvas-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Avg. score</p>
+                  <p className="tnum mt-1 text-2xl font-extrabold text-ink-900">{report.data.assessments.averageScorePercent === null ? "—" : `${report.data.assessments.averageScorePercent}%`}</p>
+                  <p className="text-xs text-ink-600">{formatNumber(report.data.assessments.attempts)} attempts</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel className="lg:col-span-7">
+          <PanelHeader
+            title="Recent orders"
+            description="Seat purchases and invoices for this agency."
+            action={<Link href="/agency/orders" className="text-sm font-semibold text-brand-700 hover:text-brand-800">All orders</Link>}
+          />
+          {orders.isError ? (
+            <ErrorState message={orders.error instanceof Error ? orders.error.message : undefined} onRetry={() => void orders.refetch()} />
+          ) : orders.isPending ? (
+            <div className="space-y-3">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-14" />)}</div>
+          ) : (orders.data?.items.length ?? 0) === 0 ? (
+            <div className="rounded-2xl bg-canvas-soft p-8 text-center">
+              <p className="text-sm font-semibold text-ink-900">No orders yet</p>
+              <p className="mt-1 text-sm text-ink-600">Buy seats to onboard your team.</p>
+              <ButtonLink href="/agency/store" variant="primary" size="sm" className="mt-4" icon={<ArrowRight className="size-4" aria-hidden />}>Visit the store</ButtonLink>
+            </div>
+          ) : (
+            <ul className="divide-y divide-line">
+              {orders.data?.items.map((order) => (
+                <li key={order.publicId} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ink-900">{order.item?.productName ?? "Order"}</p>
+                    <p className="truncate font-mono text-xs text-ink-600">{order.publicId}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="tnum text-sm font-semibold text-ink-900">{formatCurrency(order.totalMinor / 100)}</span>
+                    <StatusPill status={order.status} />
+                    <span className="text-xs text-ink-500">{order.createdAt ? relativeDays(order.createdAt) : ""}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="navy">Seat pool licence</Badge>
+            <Badge tone="brand">Agency-scoped data</Badge>
           </div>
-        ) : null}
-
-        <div className="flex flex-wrap gap-3">
-          <Link href="/agency/invitations" className={primaryBtn}>
-            <UserPlus size={14} className="text-secondary-400" /> Invite Users
-          </Link>
-          <Link href="/agency/catalogue" className={outlineBtn}>
-            <ShoppingCart size={14} /> Buy Seats
-          </Link>
-          <Link href="/agency/reports" className={outlineBtn}>
-            <BarChart3 size={14} /> Reports
-          </Link>
-        </div>
-
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Panel title="Seat Licenses" action={<Link href="/agency/seats" className="text-xs font-bold text-secondary-600 hover:underline">Manage seats</Link>}>
-            {entitlements.isLoading ? (
-              <LoadingState />
-            ) : entitlements.isError ? (
-              <ErrorState error={entitlements.error} onRetry={() => entitlements.refetch()} />
-            ) : !entitlements.data?.items.length ? (
-              <EmptyState title="No seat licenses yet" description="Purchase seats from the catalogue to start assigning training." />
-            ) : (
-              <ul className="space-y-4">
-                {entitlements.data.items.map((e) => (
-                  <li key={e.uuid}>
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="font-bold text-gray-900">{e.product?.name}</span>
-                      <span className="text-gray-500 font-semibold">
-                        {e.seats_assigned} / {e.seats_total} seats
-                      </span>
-                    </div>
-                    <ProgressBar value={e.seats_total ? (e.seats_assigned / e.seats_total) * 100 : 0} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-
-          <Panel title="Team Members" action={<Link href="/agency/members" className="text-xs font-bold text-secondary-600 hover:underline">View all</Link>}>
-            {members.isLoading ? (
-              <LoadingState />
-            ) : members.isError ? (
-              <ErrorState error={members.error} onRetry={() => members.refetch()} />
-            ) : !members.data?.items.length ? (
-              <EmptyState title="No members yet" description="Invite your staff to get started." />
-            ) : (
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className={`${thCls} pl-2`}>Name</th>
-                    <th className={thCls}>Role</th>
-                    <th className={`${thCls} text-right pr-2`}>Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                  {members.data.items.map((m) => (
-                    <tr key={m.uuid}>
-                      <td className="py-3 pl-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary-900 text-secondary-400 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {initials(memberName(m))}
-                          </div>
-                          <div>
-                            <p className="font-bold text-gray-900">{memberName(m)}</p>
-                            <p className="font-mono text-[10px] text-gray-500">{m.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <span className="bg-gray-100 text-gray-700 font-bold px-2.5 py-1 rounded-md text-[10px]">
-                          {m.role === "agency_admin" ? "Admin" : "Learner"}
-                        </span>
-                      </td>
-                      <td className="py-3 text-right pr-2">
-                        <StatusPill status={m.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Panel>
-        </div>
+        </Panel>
       </div>
-    </AgencyPage>
+    </>
   );
 }

@@ -1,71 +1,62 @@
 /**
- * Normalized API error. The client guarantees that `message` is always safe
- * to render: raw backend/stack/database messages are never surfaced to the
- * UI — see `safeMessageForStatus`.
+ * Error thrown by the API layer. `code` mirrors the backend's error codes so callers and
+ * toasts can react to the category without parsing messages.
  */
 export type ApiErrorCode =
+  | "bad_request"
+  | "validation_failed"
   | "unauthenticated"
   | "forbidden"
-  | "validation"
   | "not_found"
   | "conflict"
   | "rate_limited"
-  | "csrf"
-  | "network"
-  | "server"
-  | "unknown";
+  | "unavailable"
+  | "internal";
 
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: ApiErrorCode;
-  /** Per-field validation errors when the backend returned a structured payload. */
-  readonly fieldErrors: Record<string, string>;
-  readonly requestId?: string;
+export class ApiClientError extends Error {
+  code: ApiErrorCode;
+  status?: number;
+  requestId?: string;
+  details?: { field: string; message: string }[];
 
-  constructor(params: {
-    status: number;
-    code: ApiErrorCode;
-    message: string;
-    fieldErrors?: Record<string, string>;
-    requestId?: string;
-  }) {
-    super(params.message);
-    this.name = "ApiError";
-    this.status = params.status;
-    this.code = params.code;
-    this.fieldErrors = params.fieldErrors ?? {};
-    this.requestId = params.requestId;
+  constructor(
+    code: ApiErrorCode,
+    message: string,
+    options: { status?: number; requestId?: string; details?: { field: string; message: string }[] } = {},
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+    this.code = code;
+    this.status = options.status;
+    this.requestId = options.requestId;
+    this.details = options.details;
   }
 
   get isUnauthenticated() {
     return this.code === "unauthenticated";
   }
-
-  get isForbidden() {
-    return this.code === "forbidden";
-  }
 }
 
-/** User-facing fallback copy per status — intentionally generic and calm. */
-export function safeMessageForStatus(status: number): string {
+/** Map an HTTP status to the backend's error taxonomy. */
+export function codeForStatus(status: number): ApiErrorCode {
   switch (status) {
     case 400:
-      return "The request could not be completed. Please review the form and try again.";
+      return "bad_request";
     case 401:
-      return "Your session has expired. Please sign in again.";
+      return "unauthenticated";
     case 403:
-      return "You do not have permission to perform this action.";
+      return "forbidden";
     case 404:
-      return "The requested item could not be found.";
+      return "not_found";
     case 409:
-      return "This change conflicts with the current state. Please refresh and try again.";
+      return "conflict";
     case 422:
-      return "Some of the submitted information is invalid. Please review the form.";
+      return "validation_failed";
     case 429:
-      return "Too many requests. Please wait a moment and try again.";
+      return "rate_limited";
+    case 503:
+      return "unavailable";
     default:
-      return status >= 500
-        ? "The service is temporarily unavailable. Please try again shortly."
-        : "Something went wrong. Please try again.";
+      return status >= 500 ? "internal" : "bad_request";
   }
 }

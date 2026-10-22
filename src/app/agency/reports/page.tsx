@@ -1,102 +1,124 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Download, FileSpreadsheet } from "lucide-react";
-import { agencyApi, agencyApiExt, formatDate, useAgencyScope } from "@/features/agency/api";
-import { AgencyPage, Panel, StatTile, StatusPill, ProgressBar, outlineBtn, primaryBtn, thCls } from "@/features/agency/ui";
-import { ErrorState, LoadingState, EmptyState } from "@/components/shared/QueryState";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
 
-const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${Math.round(v)}%`);
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { ProgressBar } from "@/components/ui/progress";
+import { StatCard } from "@/components/ui/stat-card";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { useAgencyLearnerReport, useAgencyReport } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import type { AgencyLearnerReport } from "@/lib/api/hooks";
+import { formatNumber, relativeDays } from "@/lib/utils";
+
+const columns: Column<AgencyLearnerReport>[] = [
+  {
+    key: "learner",
+    header: "Learner",
+    width: "minmax(0,1.8fr)",
+    cell: (row) => (
+      <div className="min-w-0">
+        <p className="truncate font-semibold text-ink-900">{row.learnerName}</p>
+        <p className="truncate font-mono text-xs text-ink-600">{row.email}</p>
+      </div>
+    ),
+  },
+  { key: "course", header: "Course", width: "minmax(0,1.5fr)", cell: (row) => <span className="truncate text-ink-700">{row.courseTitle}</span> },
+  {
+    key: "progress",
+    header: "Progress",
+    width: "minmax(0,1.4fr)",
+    cell: (row) => (
+      <div>
+        <ProgressBar value={row.progressPercent} label={`${row.learnerName} progress`} showValue />
+        <p className="mt-1 text-xs capitalize text-ink-600">{row.enrollmentStatus.replace(/_/g, " ")}</p>
+      </div>
+    ),
+  },
+  {
+    key: "assessments",
+    header: "Assessments",
+    width: "120px",
+    align: "right",
+    cell: (row) => <span className="tnum text-ink-700">{row.assessmentsPassed}/{row.assessmentsTotal} passed</span>,
+  },
+  {
+    key: "score",
+    header: "Best score",
+    width: "100px",
+    align: "right",
+    cell: (row) => <span className="tnum font-semibold">{row.bestScorePercent === null ? "—" : `${row.bestScorePercent}%`}</span>,
+  },
+  {
+    key: "assigned",
+    header: "Assigned",
+    width: "120px",
+    cell: (row) => <span className="text-ink-600">{row.assignedAt ? relativeDays(row.assignedAt) : "—"}</span>,
+  },
+];
 
 export default function AgencyReportsPage() {
-  const { agencyId } = useAgencyScope();
-  const overview = useQuery({
-    queryKey: ["agency", agencyId, "reports"],
-    queryFn: () => agencyApi.reportsOverview(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const learners = useQuery({
-    queryKey: ["agency", agencyId, "report-learners"],
-    queryFn: () => agencyApi.reportsLearners(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const r = overview.data;
+  const { user } = useSession();
+  const report = useAgencyReport(true);
+  const learners = useAgencyLearnerReport(true);
+  const agencyId = user?.agency?.publicId;
 
   return (
-    <AgencyPage title="Agency Compliance Reports" subtitle="Exportable team training records">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/90 shadow-xs">
-          <div>
-            <span className="text-sm font-black text-gray-900">Learner Training Report</span>
-            <p className="text-xs text-gray-500 mt-1">Enrollment progress, assessment scores and completion dates for every learner.</p>
-          </div>
-          {agencyId && (
-            <div className="flex items-center gap-3">
-              <a href={agencyApiExt.learnersCsvUrl(agencyId)} download className={outlineBtn}>
-                <FileSpreadsheet size={14} className="text-emerald-600" /> Export CSV
-              </a>
-              <a href={agencyApiExt.learnersPdfUrl(agencyId)} download className={primaryBtn}>
-                <Download size={14} className="text-secondary-400" /> Export PDF
-              </a>
-            </div>
-          )}
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Reports"
+        subtitle="Tenant-scoped completion and assessment reporting. Exports are generated server-side."
+        actions={
+          agencyId ? (
+            <>
+              <ButtonLink href={`/api/agencies/${agencyId}/reports/learners.csv`} variant="secondary" icon={<FileSpreadsheet className="size-4" aria-hidden />} prefetch={false}>
+                Export CSV
+              </ButtonLink>
+              <ButtonLink href={`/api/agencies/${agencyId}/reports/learners.pdf`} variant="primary" icon={<FileText className="size-4" aria-hidden />} prefetch={false}>
+                Export PDF
+              </ButtonLink>
+            </>
+          ) : null
+        }
+      />
+
+      {report.isError ? (
+        <Panel><ErrorState message={report.error instanceof Error ? report.error.message : undefined} onRetry={() => void report.refetch()} /></Panel>
+      ) : report.isPending || !report.data ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32" />)}
         </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Active members" value={formatNumber(report.data.members.active)} icon={undefined} tone="brand" />
+          <StatCard label="Seats assigned" value={`${formatNumber(report.data.seats.assigned)} / ${formatNumber(report.data.seats.capacity)}`} tone="navy" />
+          <StatCard label="Completion" value={report.data.enrollments.completionPercent === null ? "—" : `${report.data.enrollments.completionPercent}%`} hint={`${formatNumber(report.data.enrollments.completed)} of ${formatNumber(report.data.enrollments.total)} enrollments`} tone="ok" />
+          <StatCard label="Pass rate" value={report.data.assessments.passRatePercent === null ? "—" : `${report.data.assessments.passRatePercent}%`} hint={`${formatNumber(report.data.assessments.graded)} graded attempts`} tone="info" />
+        </div>
+      )}
 
-        {overview.isLoading ? (
-          <LoadingState />
-        ) : overview.isError ? (
-          <ErrorState error={overview.error} onRetry={() => overview.refetch()} />
-        ) : r ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatTile label="Enrollments" value={r.enrollments.total} sub={`${r.enrollments.inProgress} in progress`} />
-            <StatTile label="Completion" value={pct(r.enrollments.completionPercent)} sub={`${r.enrollments.completed} completed`} />
-            <StatTile label="Pass Rate" value={pct(r.assessments.passRatePercent)} sub={`${r.assessments.attempts} attempts`} />
-            <StatTile label="Certificates" value={r.certificates.issued} sub={`Avg score ${pct(r.assessments.averageScorePercent)}`} />
-          </div>
-        ) : null}
-
-        <Panel title="Team Member Training Records">
-          {learners.isLoading ? (
-            <LoadingState />
-          ) : learners.isError ? (
-            <ErrorState error={learners.error} onRetry={() => learners.refetch()} />
-          ) : !learners.data?.items.length ? (
-            <EmptyState title="No learner activity yet" />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className={`${thCls} pl-2`}>Staff Member</th>
-                    <th className={thCls}>Course</th>
-                    <th className={`${thCls} w-40`}>Progress</th>
-                    <th className={thCls}>Best Score</th>
-                    <th className={thCls}>Assessments</th>
-                    <th className={thCls}>Completed</th>
-                    <th className={`${thCls} text-right pr-2`}>Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                  {learners.data.items.map((l, i) => (
-                    <tr key={`${l.email}-${l.courseTitle}-${i}`} className="hover:bg-gray-50/70">
-                      <td className="py-4 pl-2">
-                        <p className="font-bold text-gray-900">{l.learnerName}</p>
-                        <p className="font-mono text-[10px] text-gray-500">{l.email}</p>
-                      </td>
-                      <td className="py-4">{l.courseTitle}</td>
-                      <td className="py-4 pr-4"><ProgressBar value={l.progressPercent} /></td>
-                      <td className="py-4 font-bold text-gray-900">{pct(l.bestScorePercent)}</td>
-                      <td className="py-4">{l.assessmentsPassed} / {l.assessmentsTotal} passed</td>
-                      <td className="py-4 text-gray-500">{formatDate(l.completedAt)}</td>
-                      <td className="py-4 text-right pr-2"><StatusPill status={l.enrollmentStatus} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      </div>
-    </AgencyPage>
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Learner progress"
+          description="Per-enrollment progress, assessment results and certificate eligibility."
+          action={<Badge tone="navy"><Download className="size-3.5" aria-hidden /> Server-generated exports</Badge>}
+        />
+        <DataTable
+          caption="Learner progress report"
+          columns={columns}
+          rows={learners.data?.items}
+          rowKey={(row) => `${row.email}-${row.courseTitle}-${row.assignedAt}`}
+          loading={learners.isPending}
+          error={learners.isError ? (learners.error instanceof Error ? learners.error.message : "Could not load the learner report.") : undefined}
+          onRetry={() => void learners.refetch()}
+          empty={{ title: "No enrollments yet", description: "Assign a seat and enroll a learner to see progress here." }}
+        />
+      </Panel>
+    </>
   );
 }

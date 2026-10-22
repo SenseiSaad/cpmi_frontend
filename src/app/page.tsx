@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -17,21 +18,22 @@ import {
   ChevronDown,
   Clock,
   FileCheck,
+  FileCheck2,
+  KeyRound,
   Search,
   ExternalLink,
   Lock,
   Layers,
   HelpCircle,
   FileText,
+  ShieldCheck,
   CreditCard,
   UserCheck,
   GraduationCap,
   Sparkles,
 } from "lucide-react";
 import Logo from "@/components/shared/Logo";
-import { modules } from "@/features/public/marketing";
-import { extractToken, formatDate, isPlausibleToken, publicApi, type CertificateVerification } from "@/features/public/api";
-import { ApiError } from "@/lib/api/error";
+import { modules } from "@/lib/data";
 
 const fadeUp = {
   initial: { opacity: 0, y: 25 },
@@ -51,35 +53,21 @@ const stagger = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
   const [activeModuleIndex, setActiveModuleIndex] = useState(3); // Module 4 by default
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [verifyInput, setVerifyInput] = useState("");
-  const [verifyResult, setVerifyResult] = useState<CertificateVerification | null>(null);
   const [verifyError, setVerifyError] = useState("");
-  const [verifying, setVerifying] = useState(false);
 
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    setVerifyError("");
-    setVerifyResult(null);
-    const token = extractToken(verifyInput);
-    if (!isPlausibleToken(token)) {
-      setVerifyError("Please enter the full verification token or link printed on the certificate.");
+    const token = verifyInput.trim();
+    if (token.length < 10) {
+      setVerifyError("Paste the full verification token from the certificate PDF or verification link.");
       return;
     }
-    setVerifying(true);
-    try {
-      const result = await publicApi.verifyCertificate(token);
-      if (result.found && result.certificate) {
-        setVerifyResult(result);
-      } else {
-        setVerifyError("No certificate found matching this verification token. Please check it and try again.");
-      }
-    } catch (err) {
-      setVerifyError(err instanceof ApiError ? err.message : "Verification is unavailable right now. Please try again.");
-    } finally {
-      setVerifying(false);
-    }
+    setVerifyError("");
+    router.push(`/verify?token=${encodeURIComponent(token)}`);
   };
 
   const selectedModule = modules[activeModuleIndex] || modules[3];
@@ -94,7 +82,7 @@ export default function HomePage() {
       <div className="bg-primary-900 text-white/90 text-xs py-2 px-4 border-b border-primary-800">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-secondary-400" />
+            <span className="inline-block w-2 h-2 rounded-full bg-highlight-500 animate-pulse" />
             <span className="font-semibold text-secondary-400">Official Standards:</span>
             <span className="hidden sm:inline text-white/80">
               Compliant with 49 CFR Part 26 (DBE) & 49 CFR Part 23 (ACDBE) • WCAG 2.1 AA / Section 508
@@ -105,7 +93,7 @@ export default function HomePage() {
               Verify Credential
             </Link>
             <span className="hidden md:inline">|</span>
-            <Link href="/auth/login" className="hover:text-secondary-400 transition-colors hidden md:inline">
+            <Link href="/login" className="hover:text-secondary-400 transition-colors hidden md:inline">
               Agency Support
             </Link>
           </div>
@@ -116,7 +104,7 @@ export default function HomePage() {
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
           <Link href="/" className="focus:outline-none focus:ring-2 focus:ring-primary-500 rounded p-1">
-            <Logo size="md" compactOnMobile />
+            <Logo size="md" />
           </Link>
 
           <div className="hidden lg:flex items-center gap-7">
@@ -140,16 +128,16 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-3">
             <Link
-              href="/auth/login"
-              className="whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-semibold text-primary-500 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+              href="/login"
+              className="px-4 py-2 text-sm font-semibold text-primary-500 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               Sign In
             </Link>
             <Link
-              href="/auth/login"
-              className="whitespace-nowrap bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-bold px-4 sm:px-5 py-2.5 rounded-xl text-sm transition-all duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+              href="/login"
+              className="bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-bold px-5 py-2.5 rounded-xl text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
             >
               Get Started
             </Link>
@@ -212,8 +200,8 @@ export default function HomePage() {
 
                 <div className="flex flex-wrap items-center gap-4">
                   <Link
-                    href="/auth/login"
-                    className="flex items-center gap-2.5 bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-black px-8 py-4 rounded-xl transition-all duration-200 hover:shadow-xl text-base focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+                    href="/login"
+                    className="flex items-center gap-2.5 bg-secondary-500 hover:bg-secondary-400 text-primary-950 font-black px-8 py-4 rounded-xl transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 text-base focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
                   >
                     Get Started <ArrowRight size={18} />
                   </Link>
@@ -229,8 +217,8 @@ export default function HomePage() {
 
               {/* RIGHT: Visual Trust Badge Box (Direct from Reference Screen 1) */}
               <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
                 className="lg:col-span-5"
               >
@@ -505,7 +493,7 @@ export default function HomePage() {
                     </span>
                   </div>
                   <Link
-                    href="/auth/login"
+                    href="/login"
                     className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     Enroll in Module <ArrowRight size={14} />
@@ -568,7 +556,7 @@ export default function HomePage() {
                   </ul>
                 </div>
                 <div className="mt-8 pt-6 border-t border-white/10">
-                  <Link href="/auth/login" className="text-xs text-secondary-400 font-bold hover:underline flex items-center gap-1">
+                  <Link href="/login" className="text-xs text-secondary-400 font-bold hover:underline flex items-center gap-1">
                     Agency Admin Login <ChevronRight size={14} />
                   </Link>
                 </div>
@@ -613,7 +601,7 @@ export default function HomePage() {
                   </ul>
                 </div>
                 <div className="mt-8 pt-6 border-t border-white/10">
-                  <Link href="/auth/login" className="text-xs text-secondary-400 font-bold hover:underline flex items-center gap-1">
+                  <Link href="/login" className="text-xs text-secondary-400 font-bold hover:underline flex items-center gap-1">
                     Learner Portal Login <ChevronRight size={14} />
                   </Link>
                 </div>
@@ -655,7 +643,7 @@ export default function HomePage() {
                   </ul>
                 </div>
                 <div className="mt-8 pt-6 border-t border-white/10">
-                  <Link href="/auth/login" className="text-xs text-secondary-400 font-bold hover:underline flex items-center gap-1">
+                  <Link href="/login" className="text-xs text-secondary-400 font-bold hover:underline flex items-center gap-1">
                     Super Admin Console <ChevronRight size={14} />
                   </Link>
                 </div>
@@ -803,92 +791,58 @@ export default function HomePage() {
             </motion.div>
 
             <div className="max-w-3xl mx-auto">
-              <form onSubmit={handleVerify} className="flex flex-col sm:flex-row gap-3 mb-8">
+              <form onSubmit={handleVerify} className="flex flex-col sm:flex-row gap-3 mb-8" noValidate>
                 <div className="relative flex-1">
                   <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <label htmlFor="verify-token" className="sr-only">Verification token</label>
                   <input
+                    id="verify-token"
                     type="text"
                     value={verifyInput}
                     onChange={(e) => setVerifyInput(e.target.value)}
-                    placeholder="Enter verification token or link from the certificate"
+                    placeholder="Paste the verification token from the certificate PDF"
+                    autoComplete="off"
+                    spellCheck={false}
                     className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 </div>
                 <button
                   type="submit"
-                  disabled={verifying}
-                  className="bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 text-white font-bold px-6 py-3.5 rounded-xl text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-6 py-3.5 rounded-xl text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  {verifying ? "Verifying…" : "Verify Certificate"}
+                  Verify Certificate
                 </button>
               </form>
 
               {verifyError && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs sm:text-sm mb-6">
+                <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs sm:text-sm mb-6">
                   {verifyError}
                 </div>
               )}
 
-              {/* Certificate Card Render (Matching Screen 6) */}
-              {verifyResult?.certificate && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="relative bg-gradient-to-br from-amber-50/40 via-white to-emerald-50/20 border-4 border-double border-secondary-500/40 rounded-3xl p-8 sm:p-12 shadow-xl"
-                >
-                  {/* Watermark / Seal */}
-                  <div className="flex flex-col items-center text-center">
-                    <Logo size="md" />
-                    <p className="text-[10px] tracking-[0.25em] uppercase text-gray-400 font-bold mt-2">
-                      Official Compliance Credential
-                    </p>
-
-                    <h3 className="text-2xl sm:text-3xl font-serif font-black text-primary-950 mt-6 tracking-wide">
-                      CERTIFICATE OF COMPLETION
-                    </h3>
-
-                    <p className="text-xs text-gray-500 italic mt-3">This certifies that</p>
-                    <p className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 border-b-2 border-secondary-500 pb-1 px-4">
-                      {verifyResult.certificate.learnerName}
-                    </p>
-
-                    <p className="text-xs text-gray-600 mt-4 max-w-lg leading-relaxed">
-                      has successfully satisfied all rigorous curriculum requirements, module assessments, and final examinations for the
-                    </p>
-                    <p className="text-base sm:text-lg font-bold text-primary-900 mt-1">
-                      {verifyResult.certificate.courseTitle}
-                    </p>
-
-                    {/* Metadata Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full mt-8 pt-6 border-t border-gray-200 text-left">
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Certificate ID</p>
-                        <p className="text-xs font-black text-primary-900 mt-0.5">{verifyResult.certificate.certificateNumber}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Issue Date</p>
-                        <p className="text-xs font-bold text-gray-800 mt-0.5">{formatDate(verifyResult.certificate.issuedAt)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Expiry Date</p>
-                        <p className="text-xs font-bold text-gray-800 mt-0.5">{formatDate(verifyResult.certificate.expiresAt)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Status</p>
-                        {verifyResult.valid ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-highlight-600 bg-highlight-50 px-2 py-0.5 rounded-full mt-0.5">
-                            <CheckCircle size={11} /> Verified &amp; Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full mt-0.5">
-                            Revoked
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200">
+                  <FileCheck2 size={18} className="text-primary-700" />
+                  <p className="text-xs font-black text-gray-900 mt-2">Open the official PDF</p>
+                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
+                    The certificate PDF contains the verification link and private token issued by the platform.
+                  </p>
+                </div>
+                <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200">
+                  <KeyRound size={18} className="text-primary-700" />
+                  <p className="text-xs font-black text-gray-900 mt-2">Copy the token</p>
+                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
+                    Use the complete token from the link. Tokens are case-sensitive and cannot be guessed.
+                  </p>
+                </div>
+                <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200">
+                  <ShieldCheck size={18} className="text-primary-700" />
+                  <p className="text-xs font-black text-gray-900 mt-2">Get the registry result</p>
+                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
+                    Verification is unauthenticated and rate-limited. Certificate numbers alone are never used for lookup.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -946,7 +900,7 @@ export default function HomePage() {
 
                 <div className="mt-8 pt-6 border-t border-gray-100">
                   <Link
-                    href="/auth/login"
+                    href="/login"
                     className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 rounded-xl text-center block text-xs transition-colors"
                   >
                     Request Agency PO Quote
@@ -991,7 +945,7 @@ export default function HomePage() {
 
                 <div className="mt-8 pt-6 border-t border-gray-100">
                   <Link
-                    href="/auth/login"
+                    href="/login"
                     className="w-full border-2 border-primary-500 text-primary-500 hover:bg-primary-50 font-bold py-3 rounded-xl text-center block text-xs transition-colors"
                   >
                     Explore Modular Options
@@ -1083,13 +1037,13 @@ export default function HomePage() {
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-4">
                 <Link
-                  href="/auth/login"
-                  className="bg-primary-900 hover:bg-primary-950 text-white font-black px-9 py-4 rounded-xl transition-all duration-200 hover:shadow-xl text-base inline-block focus:outline-none focus:ring-2 focus:ring-primary-900 focus:ring-offset-2"
+                  href="/login"
+                  className="bg-primary-900 hover:bg-primary-950 text-white font-black px-9 py-4 rounded-xl transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 text-base inline-block focus:outline-none focus:ring-2 focus:ring-primary-900 focus:ring-offset-2"
                 >
                   Start Training Now
                 </Link>
                 <Link
-                  href="/auth/login"
+                  href="/login"
                   className="border-2 border-primary-950 text-primary-950 hover:bg-primary-950 hover:text-white font-bold px-7 py-4 rounded-xl transition-all duration-200 text-base inline-block"
                 >
                   Contact Agency Procurement
@@ -1128,10 +1082,10 @@ export default function HomePage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-white mb-3">For Agencies</p>
               <ul className="space-y-2 text-xs text-white/60">
-                <li><Link href="/auth/login" className="hover:text-white transition-colors">Agency Coordinator Portal</Link></li>
+                <li><Link href="/login" className="hover:text-white transition-colors">Agency Coordinator Portal</Link></li>
                 <li><Link href="#procurement" className="hover:text-white transition-colors">PO-Based Invoicing</Link></li>
                 <li><Link href="#procurement" className="hover:text-white transition-colors">Seat Pool Management</Link></li>
-                <li><Link href="/auth/login" className="hover:text-white transition-colors">Bulk CSV Onboarding</Link></li>
+                <li><Link href="/login" className="hover:text-white transition-colors">Bulk CSV Onboarding</Link></li>
                 <li><Link href="#verify" className="hover:text-white transition-colors">Certificate Verification</Link></li>
               </ul>
             </div>
@@ -1139,10 +1093,10 @@ export default function HomePage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-white mb-3">Access & Support</p>
               <ul className="space-y-2 text-xs text-white/60">
-                <li><Link href="/auth/login" className="hover:text-white transition-colors">Learner Sign In</Link></li>
-                <li><Link href="/auth/login" className="hover:text-white transition-colors">Super Admin Access</Link></li>
-                <li><Link href="/auth/forgot-password" className="hover:text-white transition-colors">Password Reset</Link></li>
-                <li><Link href="/auth/invitation" className="hover:text-white transition-colors">Accept Invitation</Link></li>
+                <li><Link href="/login" className="hover:text-white transition-colors">Learner Sign In</Link></li>
+                <li><Link href="/login" className="hover:text-white transition-colors">Super Admin Access</Link></li>
+                <li><Link href="/forgot-password" className="hover:text-white transition-colors">Password Reset</Link></li>
+                <li><Link href="/invitations/accept" className="hover:text-white transition-colors">Accept Invitation</Link></li>
               </ul>
             </div>
           </div>

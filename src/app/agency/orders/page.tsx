@@ -1,101 +1,85 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ShoppingCart } from "lucide-react";
-import { agencyApiExt, formatDate, formatMoney, useAgencyScope } from "@/features/agency/api";
-import { AgencyPage, Banner, Panel, StatusPill, primaryBtn, outlineBtn, thCls } from "@/features/agency/ui";
-import { ErrorState, LoadingState, EmptyState } from "@/components/shared/QueryState";
+import { Receipt } from "lucide-react";
+import { useState } from "react";
 
-const PAGE_SIZE = 25;
+import { PageHeader } from "@/components/layout/page-header";
+import { StatusPill } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Panel } from "@/components/ui/panel";
+import { Pagination } from "@/components/ui/pagination";
+import { useOrders } from "@/lib/api/hooks";
+import type { Order } from "@/lib/api/types";
+import { formatCurrency, formatNumber, relativeDays } from "@/lib/utils";
 
-function CheckoutBanner() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const checkout = params.get("checkout");
-  if (checkout !== "success" && checkout !== "cancelled") return null;
-  const dismiss = () => router.replace("/agency/orders");
-  return checkout === "success" ? (
-    <Banner tone="success" onClose={dismiss}>
-      Payment received. Your seats will appear under Seat Licenses once Stripe confirms the payment.
-    </Banner>
-  ) : (
-    <Banner tone="info" onClose={dismiss}>
-      Checkout was cancelled. No payment was taken.
-    </Banner>
-  );
-}
+const PAGE_SIZE = 10;
+
+const columns: Column<Order>[] = [
+  {
+    key: "order",
+    header: "Order",
+    width: "minmax(0,2fr)",
+    cell: (o) => (
+      <div className="min-w-0">
+        <p className="truncate font-semibold text-ink-900">{o.item?.productName ?? "Order"}</p>
+        <p className="truncate font-mono text-xs text-ink-600">{o.publicId}</p>
+      </div>
+    ),
+  },
+  { key: "qty", header: "Seats", width: "80px", align: "right", cell: (o) => <span className="tnum">{o.item?.quantity ?? "—"}</span> },
+  {
+    key: "total",
+    header: "Total",
+    width: "120px",
+    align: "right",
+    cell: (o) => (
+      <div>
+        <p className="tnum font-semibold text-ink-900">{formatCurrency(o.totalMinor / 100)}</p>
+        <p className="text-xs uppercase text-ink-500">{o.currency}</p>
+      </div>
+    ),
+  },
+  { key: "method", header: "Payment", width: "120px", cell: (o) => <span className="capitalize text-ink-700">{o.paymentMethod}</span> },
+  { key: "status", header: "Status", width: "120px", cell: (o) => <StatusPill status={o.status} /> },
+  {
+    key: "po",
+    header: "PO number",
+    width: "140px",
+    cell: (o) => <span className="truncate font-mono text-xs text-ink-600">{o.purchaseOrderNumber ?? "—"}</span>,
+  },
+  { key: "created", header: "Created", width: "120px", cell: (o) => <span className="text-ink-600">{o.createdAt ? relativeDays(o.createdAt) : "—"}</span> },
+];
 
 export default function AgencyOrdersPage() {
-  const { agencyId } = useAgencyScope();
   const [page, setPage] = useState(1);
-  const orders = useQuery({
-    queryKey: ["agency", agencyId, "orders", { page, pageSize: PAGE_SIZE }],
-    queryFn: () => agencyApiExt.orders(agencyId as string, page, PAGE_SIZE),
-    enabled: Boolean(agencyId)
-  });
-  const data = orders.data;
+  const orders = useOrders({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+  const total = orders.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <AgencyPage title="Orders">
-      <div className="space-y-4">
-        <Suspense fallback={null}>
-          <CheckoutBanner />
-        </Suspense>
-        <Panel title="Order History" action={<Link href="/agency/catalogue" className={primaryBtn}><ShoppingCart size={14} className="text-secondary-400" /> Buy Seats</Link>}>
-          {orders.isLoading ? (
-            <LoadingState />
-          ) : orders.isError ? (
-            <ErrorState error={orders.error} onRetry={() => orders.refetch()} />
-          ) : !data?.items.length ? (
-            <EmptyState title="No orders yet" description="Seat purchases will appear here." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className={`${thCls} pl-2`}>Date</th>
-                    <th className={thCls}>Product</th>
-                    <th className={thCls}>Seats</th>
-                    <th className={thCls}>Payment</th>
-                    <th className={thCls}>Total</th>
-                    <th className={thCls}>Status</th>
-                    <th className={`${thCls} text-right pr-2`}></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                  {data.items.map((o) => (
-                    <tr key={o.uuid} className="hover:bg-gray-50/70">
-                      <td className="py-4 pl-2 text-gray-500">{formatDate(o.createdAt)}</td>
-                      <td className="py-4 font-bold text-gray-900">{o.item?.productName ?? "—"}</td>
-                      <td className="py-4">{o.item?.quantity ?? "—"}</td>
-                      <td className="py-4 capitalize">{o.paymentMethod}</td>
-                      <td className="py-4 font-bold text-gray-900">{formatMoney(o.totalMinor, o.currency)}</td>
-                      <td className="py-4"><StatusPill status={o.status} /></td>
-                      <td className="py-4 text-right pr-2">
-                        <Link href={`/agency/orders/${o.uuid}`} className="text-xs font-bold text-secondary-600 hover:underline">
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.pages > 1 && (
-                <div className="flex items-center justify-between pt-4 text-xs text-gray-500">
-                  <span>Page {data.page} of {data.pages}</span>
-                  <div className="flex gap-2">
-                    <button type="button" className={outlineBtn} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-                    <button type="button" className={outlineBtn} disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)}>Next</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </Panel>
-      </div>
-    </AgencyPage>
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Order history"
+        subtitle="Card payments and purchase-order invoices for your agency."
+        actions={<ButtonLink href="/agency/store" variant="primary" icon={<Receipt className="size-4" aria-hidden />}>Buy seats</ButtonLink>}
+      />
+
+      <Panel>
+        <p className="tnum mb-4 text-sm text-ink-600">{formatNumber(total)} orders</p>
+        <DataTable
+          caption="Agency orders"
+          columns={columns}
+          rows={orders.data?.items}
+          rowKey={(o) => o.publicId}
+          loading={orders.isPending}
+          error={orders.isError ? (orders.error instanceof Error ? orders.error.message : "Could not load orders.") : undefined}
+          onRetry={() => void orders.refetch()}
+          empty={{ title: "No orders yet", description: "Seat purchases and invoices will appear here." }}
+        />
+        <Pagination page={page} pageCount={pageCount} onChange={setPage} total={total} pageSize={PAGE_SIZE} />
+      </Panel>
+    </>
   );
 }

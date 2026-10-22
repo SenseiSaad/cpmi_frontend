@@ -1,95 +1,125 @@
 "use client";
 
-import Link from "next/link";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { CreditCard, Plus, ExternalLink } from "lucide-react";
-import { agencyApi, agencyApiExt, agencyKeys, useAgencyScope } from "@/features/agency/api";
-import { AgencyPage, Banner, StatusPill, primaryBtn, outlineBtn } from "@/features/agency/ui";
-import { ErrorState, LoadingState, errorMessage } from "@/components/shared/QueryState";
+import { Building2, CreditCard, LogOut, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { ProgressBar } from "@/components/ui/progress";
+import { api } from "@/lib/api";
+import { useEntitlements } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import { formatNumber } from "@/lib/utils";
 
 export default function AgencySettingsPage() {
-  const { agencyId } = useAgencyScope();
-  const profile = useQuery({
-    queryKey: ["agency", agencyId, "profile"],
-    queryFn: () => agencyApiExt.agency(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const entitlements = useQuery({
-    queryKey: agencyKeys.entitlements(agencyId),
-    queryFn: () => agencyApi.entitlements(agencyId as string),
-    enabled: Boolean(agencyId)
-  });
-  const portal = useMutation({
-    mutationFn: () => agencyApiExt.billingPortal(agencyId as string),
-    onSuccess: ({ url }) => window.location.assign(url)
-  });
+  const { user, signOut } = useSession();
+  const entitlements = useEntitlements();
+  const router = useRouter();
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalBusy, setPortalBusy] = useState(false);
 
-  const active = (entitlements.data?.items ?? []).filter((e) => e.status === "active");
-  const total = active.reduce((n, e) => n + e.seats_total, 0);
-  const assigned = active.reduce((n, e) => n + e.seats_assigned, 0);
+  async function openBillingPortal() {
+    setPortalBusy(true);
+    setPortalError(null);
+    try {
+      const { url } = await api.store.billingPortal();
+      if (url) window.location.assign(url);
+      else setPortalError("Stripe did not return a billing portal link.");
+    } catch (error) {
+      setPortalError(error instanceof Error ? error.message : "Could not open the billing portal.");
+    } finally {
+      setPortalBusy(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
-    <AgencyPage title="Billing & Invoicing" subtitle="Licensed seats, Stripe billing and invoice payments">
-      <div className="max-w-4xl space-y-6">
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <span className="text-xs font-bold text-secondary-600 uppercase tracking-wider bg-secondary-50 px-2.5 py-0.5 rounded-full border border-secondary-200">
-                Seat Pool License
-              </span>
-              <h2 className="text-xl font-black text-gray-900 mt-2">Licensed Seat Allocation</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Seats can be reassigned to new agency personnel when staff turn over.</p>
-            </div>
-            <Link href="/agency/catalogue" className={primaryBtn}>
-              <Plus size={14} className="text-secondary-400" /> Purchase Additional Seats
-            </Link>
-          </div>
-          {entitlements.isLoading ? (
-            <LoadingState />
-          ) : entitlements.isError ? (
-            <ErrorState error={entitlements.error} onRetry={() => entitlements.refetch()} />
-          ) : (
-            <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 text-center">
-              <div><span className="text-[10px] font-bold text-gray-400 uppercase">Total Licensed</span><p className="text-3xl font-black text-primary-950 mt-0.5">{total}</p></div>
-              <div><span className="text-[10px] font-bold text-gray-400 uppercase">Assigned Staff</span><p className="text-3xl font-black text-gray-900 mt-0.5">{assigned}</p></div>
-              <div><span className="text-[10px] font-bold text-gray-400 uppercase">Available Slots</span><p className="text-3xl font-black text-highlight-600 mt-0.5">{Math.max(0, total - assigned)}</p></div>
-            </div>
-          )}
-        </div>
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Settings"
+        subtitle="Agency identity, seat entitlements and billing."
+        actions={<Button variant="secondary" icon={<LogOut className="size-4" aria-hidden />} onClick={() => void handleSignOut()}>Sign out</Button>}
+      />
 
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs space-y-4">
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Agency & Billing</h3>
-          {profile.isLoading ? (
-            <LoadingState />
-          ) : profile.isError ? (
-            <ErrorState error={profile.error} onRetry={() => profile.refetch()} />
-          ) : profile.data ? (
-            <dl className="grid sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <dt className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Agency Name</dt>
-                <dd className="font-bold text-gray-900 mt-0.5">{profile.data.displayName}</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Account Status</dt>
-                <dd className="mt-0.5"><StatusPill status={profile.data.status} /></dd>
-              </div>
-            </dl>
-          ) : null}
-          <p className="text-xs text-gray-500">
-            Pay by card through Stripe Checkout or request an invoice with a purchase order number when buying seats. Payment methods,
-            invoices and receipts are managed in the Stripe billing portal.
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Agency" description="Tenant identity and your membership." action={<Building2 className="size-5 text-ink-500" aria-hidden />} />
+          <dl className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <dt className="text-ink-600">Name</dt>
+              <dd className="text-right font-semibold text-ink-900">{user?.agency?.displayName ?? "—"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <dt className="text-ink-600">Slug</dt>
+              <dd className="font-mono text-xs text-ink-900">{user?.agency?.slug ?? "—"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <dt className="text-ink-600">Your role</dt>
+              <dd><Badge tone="navy">{user?.role.replace(/_/g, " ") ?? "—"}</Badge></dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="flex items-center gap-1.5 text-ink-600"><UserRound className="size-4" aria-hidden /> Signed in as</dt>
+              <dd className="text-right">
+                <p className="font-semibold text-ink-900">{user ? `${user.firstName} ${user.lastName}` : "—"}</p>
+                <p className="font-mono text-xs text-ink-600">{user?.email ?? "—"}</p>
+              </dd>
+            </div>
+          </dl>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Billing" description="Card payments and purchase-order invoicing are handled by Stripe." action={<CreditCard className="size-5 text-ink-500" aria-hidden />} />
+          <p className="text-sm text-ink-600">
+            Open the Stripe billing portal to update the payment method, download invoices or manage the subscription.
           </p>
-          {portal.isError && <Banner tone="error">{errorMessage(portal.error)}</Banner>}
-          <div className="pt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100">
-            <Link href="/agency/orders" className={outlineBtn}>View Orders</Link>
-            <button type="button" onClick={() => portal.mutate()} disabled={portal.isPending || !agencyId} className={primaryBtn}>
-              <CreditCard size={14} className="text-secondary-400" />
-              {portal.isPending ? "Opening portal..." : "Manage Billing"}
-              <ExternalLink size={12} />
-            </button>
+          {portalError ? <p role="alert" className="mt-3 rounded-xl bg-bad-bg p-3 text-sm text-bad">{portalError}</p> : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button loading={portalBusy} onClick={() => void openBillingPortal()}>Open billing portal</Button>
+            <ButtonLink href="/agency/orders" variant="secondary">Order history</ButtonLink>
           </div>
-        </div>
+        </Panel>
       </div>
-    </AgencyPage>
+
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Seat entitlements"
+          description="Active and historical seat pools for this agency."
+          action={<ButtonLink href="/agency/seats" variant="secondary" size="sm">Manage seats</ButtonLink>}
+        />
+        {entitlements.isPending ? (
+          <p className="py-4 text-sm text-ink-600">Loading entitlements…</p>
+        ) : entitlements.isError ? (
+          <p className="py-4 text-sm text-bad">Could not load entitlements.</p>
+        ) : (entitlements.data?.length ?? 0) === 0 ? (
+          <p className="py-4 text-sm text-ink-600">No entitlements yet. Buy seats from the store to create one.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {entitlements.data?.map((ent) => (
+              <li key={ent.id} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_auto] sm:items-center">
+                <div>
+                  <p className="font-semibold text-ink-900">{ent.productName}</p>
+                  <p className="text-xs text-ink-600">
+                    {new Date(ent.validFrom).toLocaleDateString()} – {new Date(ent.validUntil).toLocaleDateString()}
+                  </p>
+                </div>
+                <ProgressBar value={ent.seatCapacity > 0 ? (ent.seatsUsed / ent.seatCapacity) * 100 : 0} label={`${ent.productName} seats`} showValue />
+                <div className="flex items-center gap-3 sm:justify-end">
+                  <span className="tnum text-sm text-ink-600">{formatNumber(ent.seatsUsed)} / {formatNumber(ent.seatCapacity)}</span>
+                  <StatusPill status={ent.status} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </>
   );
 }

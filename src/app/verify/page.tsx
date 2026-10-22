@@ -1,18 +1,18 @@
-"use client";
+import type { Metadata } from "next";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import VerifyCertificateView from "@/features/public/VerifyCertificateView";
+import { VerifyZed } from "./verify-view";
 
-export default function VerifyPage() {
-  return (
-    <Suspense>
-      <VerifyFromQuery />
-    </Suspense>
-  );
-}
+export const metadata: Metadata = {
+  title: "Verify a certificate",
+  description: "Verify a Certification Academy credential using the private token printed on the official PDF.",
+};
 
-function VerifyFromQuery() {
-  const searchParams = useSearchParams();
-  return <VerifyCertificateView token={searchParams.get("token")} />;
+export default function VerifyPage({
+  searchParams,
+}: {
+  searchParams?: { token?: string | string[] };
+}) {
+  const raw = searchParams?.token;
+  const token = Array.isArray(raw) ? raw[0] ?? null : raw ?? null;
+  return <VerifyZed token={token} />;
 }

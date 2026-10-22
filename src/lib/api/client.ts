@@ -1,265 +1,182 @@
-import { ApiError, safeMessageForStatus, type ApiErrorCode } from "./error";
-import type { ApiErrorBody } from "./types";
+/**
+ * HTTP client for the real backend.
+ *
+ * Mechanics (verified against cpmi-backend):
+ *  - Same-origin through the Next rewrite `/api/*` → backend, so the HttpOnly
+ *    SameSite=Lax `ca_session` cookie works and the middleware can see it.
+ *  - CSRF is double-submit: `GET /api/auth/csrf` returns a token (and sets `ca_csrf`);
+ *    it must ride along as `X-CSRF-Token` on EVERY mutation, including login.
+ *  - Errors are `{ error: { code, message, requestId, details? } }`.
+ *  - A 401 on any authenticated call notifies listeners (the provider redirects to /login).
+ */
+import { env } from "@/config/env";
 
-export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+import { ApiClientError, codeForStatus, type ApiErrorCode } from "./error";
 
-/** Backend validation details (`[{ field, message }]`) → `{ field: message }` (first wins). */
-function detailsToFieldErrors(details: unknown): Record<string, string> | undefined {
-  if (!Array.isArray(details)) return undefined;
-  const out: Record<string, string> = {};
-  for (const item of details) {
-    const field = (item as { field?: unknown })?.field;
-    const message = (item as { message?: unknown })?.message;
-    if (typeof field === "string" && field && typeof message === "string" && !(field in out)) {
-      out[field] = message;
-    }
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+let csrfToken: string | null = null;
+let csrfFetch: Promise<string | null> | null = null;
+
+type UnauthenticatedListener = () => void;
+const unauthenticatedListeners = new Set<UnauthenticatedListener>();
+
+/** Registers a callback fired when any authenticated request returns 401. */
+export function onUnauthenticated(listener: UnauthenticatedListener): () => void {
+  unauthenticatedListeners.add(listener);
+  return () => unauthenticatedListeners.delete(listener);
 }
 
-export interface RequestOptions {
+function notifyUnauthenticated() {
+  unauthenticatedListeners.forEach((listener) => listener());
+}
+
+function buildUrl(path: string, query?: Record<string, string | number | boolean | undefined | null>): string {
+  const url = `${env.apiBaseUrl}${path}`;
+  if (!query) return url;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `${url}?${qs}` : url;
+}
+
+async function fetchCsrfToken(force = false): Promise<string | null> {
+  if (csrfToken && !force) return csrfToken;
+  if (csrfFetch) return csrfFetch;
+  csrfFetch = (async () => {
+    try {
+      const res = await fetch(`${env.apiBaseUrl}/api/auth/csrf`, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { csrfToken?: string; csrf_token?: string };
+      csrfToken = body.csrfToken ?? body.csrf_token ?? null;
+      return csrfToken;
+    } catch {
+      return null;
+    } finally {
+      csrfFetch = null;
+    }
+  })();
+  return csrfFetch;
+}
+
+interface ParsedError {
+  code?: string;
+  message?: string;
+  requestId?: string;
+  details?: { field: string; message: string }[];
+}
+
+function parseError(body: unknown): ParsedError {
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const envelope = (raw.error && typeof raw.error === "object" ? raw.error : raw) as Record<string, unknown>;
+  const details = Array.isArray(envelope.details)
+    ? (envelope.details as { field?: unknown; message?: unknown }[])
+        .filter((d) => typeof d?.field === "string" && typeof d?.message === "string")
+        .map((d) => ({ field: d.field as string, message: d.message as string }))
+    : undefined;
+  return {
+    code: typeof envelope.code === "string" ? envelope.code : undefined,
+    message: typeof envelope.message === "string" ? envelope.message : undefined,
+    requestId: typeof envelope.requestId === "string" ? envelope.requestId : undefined,
+    details,
+  };
+}
+
+const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
+  "bad_request",
+  "validation_failed",
+  "unauthenticated",
+  "forbidden",
+  "not_found",
+  "conflict",
+  "rate_limited",
+  "unavailable",
+  "internal",
+]);
+
+export interface HttpOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
-  signal?: AbortSignal;
   headers?: Record<string, string>;
+  signal?: AbortSignal;
   /** Send this text verbatim (e.g. a CSV upload) instead of a JSON-encoded body. */
   rawBody?: { text: string; contentType: string };
 }
 
-interface RequestContext {
-  method: Method;
-  path: string;
-  options: RequestOptions;
-  requestId: string;
-}
+/** Performs one API call and returns the parsed JSON body (or undefined for 204). */
+export async function http<T>(method: HttpMethod, path: string, body?: unknown, options: HttpOptions = {}): Promise<T> {
+  const mutating = method !== "GET";
 
-export type UnauthenticatedListener = () => void;
-
-const MUTATING: ReadonlySet<Method> = new Set<Method>(["POST", "PUT", "PATCH", "DELETE"]);
-
-/**
- * Single centralized API client.
- *
- * Security model (see README > Authentication):
- * - The backend session is an opaque HttpOnly cookie; this client never
- *   reads, stores or transmits tokens from web storage.
- * - Every request sends `credentials: "include"` so the session cookie and
- *   CSRF cookie flow automatically.
- * - Mutating requests attach the `X-CSRF-Token` header, obtained lazily from
- *   GET /api/auth/csrf and cached in memory only.
- * - 401 => unauthenticated (listeners fire, e.g. redirect to session-expired).
- *   403 => authenticated but unauthorized (never treated as logged out).
- * - Mutations are never retried automatically. Callers decide on query-level
- *   retry for safe (idempotent GET) requests only.
- */
-export class ApiClient {
-  private csrfToken: string | null = null;
-  private csrfFetch: Promise<string | null> | null = null;
-  private unauthenticatedListeners = new Set<UnauthenticatedListener>();
-
-  constructor(private readonly baseUrl: string) {}
-
-  onUnauthenticated(listener: UnauthenticatedListener): () => void {
-    this.unauthenticatedListeners.add(listener);
-    return () => this.unauthenticatedListeners.delete(listener);
-  }
-
-  private notifyUnauthenticated() {
-    this.unauthenticatedListeners.forEach((listener) => listener());
-  }
-
-  private buildUrl(path: string, query?: RequestOptions["query"]): string {
-    const url = `${this.baseUrl}${path}`;
-    if (!query) return url;
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined && value !== null && value !== "") {
-        params.set(key, String(value));
-      }
-    }
-    const qs = params.toString();
-    return qs ? `${url}?${qs}` : url;
-  }
-
-  private async fetchCsrfToken(): Promise<string | null> {
-    if (!this.csrfFetch) {
-      this.csrfFetch = (async () => {
-        try {
-          const response = await fetch(this.buildUrl("/api/auth/csrf"), {
-            method: "GET",
-            credentials: "include",
-            cache: "no-store",
-            headers: { Accept: "application/json" }
-          });
-          if (!response.ok) return null;
-          const body = (await response.json()) as { csrf_token?: string; csrfToken?: string };
-          const token = body.csrf_token ?? body.csrfToken ?? null;
-          this.csrfToken = token;
-          return token;
-        } catch {
-          return null;
-        } finally {
-          this.csrfFetch = null;
-        }
-      })();
-    }
-    return this.csrfFetch;
-  }
-
-  private async parseBody(response: Response): Promise<unknown> {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) return null;
-    try {
-      return await response.json();
-    } catch {
-      return null;
-    }
-  }
-
-  /** Extracts only safe, structured information from an error payload. */
-  private normalizeError(status: number, body: unknown, requestId: string): ApiError {
-    const raw = (body ?? {}) as ApiErrorBody;
-    // Unwrap the backend's `{ error: { ... } }` envelope into the flat shape used below.
-    const envelope = raw.error && typeof raw.error === "object" ? raw.error : undefined;
-    const parsed: ApiErrorBody = envelope
-      ? {
-          ...raw,
-          message: raw.message ?? envelope.message,
-          code: raw.code ?? envelope.code,
-          request_id: raw.request_id ?? envelope.requestId,
-          errors: raw.errors ?? detailsToFieldErrors(envelope.details)
-        }
-      : raw;
-    const code: ApiErrorCode =
-      status === 401
-        ? "unauthenticated"
-        : status === 403
-          ? "forbidden"
-          : status === 404
-            ? "not_found"
-            : status === 409
-              ? "conflict"
-              : status === 429
-                ? "rate_limited"
-                : status >= 500
-                  ? "server"
-                  : "validation";
-
-    const fieldErrors: Record<string, string> = {};
-    if (parsed.errors && typeof parsed.errors === "object") {
-      for (const [field, messages] of Object.entries(parsed.errors)) {
-        const message = Array.isArray(messages) ? messages[0] : messages;
-        if (typeof message === "string") fieldErrors[field] = message;
-      }
-    }
-
-    // Backend messages are trusted only for 4xx validation-style payloads; a
-    // database or stack message on a 5xx is never shown. 401/403 keep the calm
-    // generic wording (session expired / no permission).
-    const backendMessage =
-      status < 500 && status !== 401 && status !== 403
-        ? typeof parsed.detail === "string"
-          ? parsed.detail
-          : typeof parsed.message === "string"
-            ? parsed.message
-            : undefined
-        : undefined;
-    const hasFieldErrors = Object.keys(fieldErrors).length > 0 && status < 500;
-    const safeMessage = hasFieldErrors
-      ? "Please review the highlighted fields."
-      : (backendMessage ?? safeMessageForStatus(status));
-
-    return new ApiError({
-      status,
-      code,
-      message: safeMessage,
-      fieldErrors,
-      requestId: parsed.request_id ?? requestId
-    });
-  }
-
-  private async request<T>(method: Method, path: string, options: RequestOptions = {}, body?: unknown, retryWithoutCsrf = false): Promise<T> {
-    const requestId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
+  const send = async (retriedCsrf: boolean): Promise<Response> => {
     const headers: Record<string, string> = {
       Accept: "application/json",
-      "X-Request-Id": requestId,
-      ...options.headers
+      ...options.headers,
     };
-
     if (options.rawBody) headers["Content-Type"] = options.rawBody.contentType;
     else if (body !== undefined) headers["Content-Type"] = "application/json";
-    if (MUTATING.has(method)) {
-      const token = retryWithoutCsrf ? await this.fetchCsrfToken() : (this.csrfToken ?? (await this.fetchCsrfToken()));
+    if (mutating) {
+      const token = retriedCsrf ? await fetchCsrfToken(true) : csrfToken ?? (await fetchCsrfToken());
       if (token) headers["X-CSRF-Token"] = token;
     }
+    const init: RequestInit = {
+      method,
+      credentials: "include",
+      cache: "no-store",
+      headers,
+      signal: options.signal,
+    };
+    if (options.rawBody) init.body = options.rawBody.text;
+    else if (body !== undefined) init.body = JSON.stringify(body);
+    return fetch(buildUrl(path, options.query), init);
+  };
 
-    let response: Response;
-    try {
-      response = await fetch(this.buildUrl(path, options.query), {
-        method,
-        credentials: "include",
-        // Authenticated API responses must never be served from the HTTP cache: a 304 has
-        // no body and would surface as a failed request to the UI.
-        cache: "no-store",
-        headers,
-        signal: options.signal,
-        body: options.rawBody ? options.rawBody.text : body !== undefined ? JSON.stringify(body) : undefined
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      throw new ApiError({ status: 0, code: "network", message: safeMessageForStatus(500), requestId });
+  let res: Response;
+  try {
+    res = await send(false);
+    // The CSRF cookie/token may have rotated; refresh once and retry the mutation.
+    if (mutating && (res.status === 401 || res.status === 403)) {
+      const refreshed = await fetchCsrfToken(true);
+      if (refreshed) res = await send(true);
     }
-
-    if (response.status === 401 && MUTATING.has(method) && !retryWithoutCsrf) {
-      // A rejected CSRF token surfaces as 401/403 on some backends; retry
-      // exactly once with a freshly fetched token.
-      this.csrfToken = null;
-      const fresh = await this.fetchCsrfToken();
-      if (fresh) {
-        return this.request<T>(method, path, options, body, true);
-      }
-    }
-
-    const responseBody = await this.parseBody(response);
-
-    if (!response.ok) {
-      // The session probe on a public page is expected to 401 for anonymous visitors, and a
-      // failed login is a form error. Neither means "the session expired", so they must not
-      // trigger the global session-expired redirect.
-      const expectedAuthProbe =
-        path === "/api/auth/me" || path === "/api/auth/login" || path === "/api/auth/csrf";
-      if (response.status === 401 && !expectedAuthProbe) this.notifyUnauthenticated();
-      throw this.normalizeError(response.status, responseBody, requestId);
-    }
-
-    return (responseBody ?? (undefined as unknown)) as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiClientError("unavailable", "Could not reach the service. Check your connection and try again.");
   }
 
-  get<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>("GET", path, options);
+  if (res.status === 204) return undefined as T;
+
+  const contentType = res.headers.get("content-type") ?? "";
+  const payload = contentType.includes("application/json") ? await res.json().catch(() => null) : null;
+
+  if (!res.ok) {
+    const parsed = parseError(payload);
+    const code = (parsed.code && KNOWN_CODES.has(parsed.code) ? parsed.code : codeForStatus(res.status)) as ApiErrorCode;
+    // Expected 401s on the session probe / bad credentials must not trigger the global redirect.
+    const authProbe = path === "/api/auth/me" || path === "/api/auth/login" || path === "/api/auth/csrf";
+    if (res.status === 401 && !authProbe) notifyUnauthenticated();
+    const message =
+      res.status === 401
+        ? "Invalid email or password"
+        : res.status === 403
+          ? parsed.message && !mutating ? parsed.message : "You do not have permission to perform this action."
+          : (parsed.message ?? defaultMessage(res.status));
+    throw new ApiClientError(code, message, { status: res.status, requestId: parsed.requestId, details: parsed.details });
   }
 
-  post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("POST", path, options, body);
-  }
-
-  put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("PUT", path, options, body);
-  }
-
-  patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("PATCH", path, options, body);
-  }
-
-  delete<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>("DELETE", path, options);
-  }
+  return payload as T;
 }
 
-import { env } from "@/config/env";
-
-export const api = new ApiClient(env.apiBaseUrl);
-export { ApiError };
+function defaultMessage(status: number): string {
+  if (status === 404) return "The requested item could not be found.";
+  if (status === 409) return "This change conflicts with the current state. Refresh and try again.";
+  if (status === 422) return "Please review the highlighted fields.";
+  if (status === 429) return "Too many requests. Please wait a moment and try again.";
+  if (status >= 500) return "The service is temporarily unavailable. Please try again shortly.";
+  return "Something went wrong. Please try again.";
+}

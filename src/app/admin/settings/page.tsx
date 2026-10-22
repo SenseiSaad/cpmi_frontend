@@ -1,114 +1,103 @@
 "use client";
 
-import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { Activity, Bell, CreditCard, ScrollText, Tags } from "lucide-react";
-import { ErrorState, LoadingState } from "@/components/shared/QueryState";
-import { platformApi, type QueueStat } from "@/features/platform/api";
-import { AdminPage, btnDark, Panel, StatusPill } from "@/features/platform/ui";
+import { Database, Globe2, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-function age(seconds: number | null): string {
-  if (seconds === null) return "—";
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-  if (seconds < 86_400) return `${Math.round(seconds / 3600)}h`;
-  return `${Math.round(seconds / 86_400)}d`;
-}
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { env } from "@/config/env";
+import { useHealth } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import { formatNumber } from "@/lib/utils";
 
-function mb(bytes: number): string {
-  return `${Math.round(bytes / 1024 / 1024)} MB`;
-}
-
-function QueueRow({ name, desc, icon: Icon, queue }: { name: string; desc: string; icon: typeof Activity; queue: QueueStat }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div className="flex items-center gap-3.5">
-        <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-primary-900">
-          <Icon size={18} />
-        </div>
-        <div>
-          <h3 className="text-xs font-bold text-gray-900">{name}</h3>
-          <p className="text-[11px] text-gray-500">{desc}</p>
-        </div>
-      </div>
-      <dl className="flex gap-5 text-xs">
-        <div>
-          <dt className="text-[10px] font-bold uppercase text-gray-400">Pending</dt>
-          <dd className="font-black text-gray-900 tabular-nums">{queue.pending}</dd>
-        </div>
-        {queue.sending !== undefined && (
-          <div>
-            <dt className="text-[10px] font-bold uppercase text-gray-400">Sending</dt>
-            <dd className="font-black text-gray-900 tabular-nums">{queue.sending}</dd>
-          </div>
-        )}
-        {queue.failed !== undefined && (
-          <div>
-            <dt className="text-[10px] font-bold uppercase text-gray-400">Failed</dt>
-            <dd className={`font-black tabular-nums ${queue.failed > 0 ? "text-red-700" : "text-gray-900"}`}>{queue.failed}</dd>
-          </div>
-        )}
-        <div>
-          <dt className="text-[10px] font-bold uppercase text-gray-400">Oldest</dt>
-          <dd className="font-black text-gray-900 tabular-nums">{age(queue.oldestSeconds)}</dd>
-        </div>
-      </dl>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-3 text-sm last:border-0">
+      <span className="text-ink-600">{label}</span>
+      <span className="font-semibold text-ink-900">{value}</span>
     </div>
   );
 }
 
 export default function AdminSettingsPage() {
-  const ops = useQuery({
-    queryKey: ["platform", "observability"],
-    queryFn: () => platformApi.observability(),
-    refetchInterval: 30_000
-  });
+  const { user, signOut } = useSession();
+  const health = useHealth();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
-    <AdminPage title="Platform Operations" subtitle="Background queue health and process status">
-      <div className="max-w-4xl space-y-6">
-        <Panel
-          title="Queues"
-          description="Leading indicators: a growing backlog or an old oldest item means a worker is behind. Refreshes every 30 seconds."
-          action={ops.data ? <StatusPill status={ops.data.status === "ok" ? "active" : ops.data.status} /> : undefined}
-        >
-          {ops.isPending ? (
-            <LoadingState />
-          ) : ops.isError ? (
-            <ErrorState error={ops.error} onRetry={() => void ops.refetch()} />
-          ) : (
-            <div className="space-y-3">
-              <QueueRow name="Audit outbox" desc="Events waiting to be appended to the hash-chained audit log" icon={ScrollText} queue={ops.data.queues.auditOutbox} />
-              <QueueRow name="Notifications" desc="Transactional email waiting for delivery" icon={Bell} queue={ops.data.queues.notifications} />
-              <QueueRow name="Stripe webhooks" desc="Payment events waiting to be processed or retried" icon={CreditCard} queue={ops.data.queues.stripeWebhooks} />
-            </div>
-          )}
+    <>
+      <PageHeader
+        eyebrow="Platform"
+        title="Settings"
+        subtitle="Your account, environment and service health. Platform policy is configured on the backend."
+        actions={<Button variant="secondary" icon={<LogOut className="size-4" aria-hidden />} onClick={() => void handleSignOut()}>Sign out</Button>}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Account" description="Signed-in platform operator." />
+          <Row label="Name" value={<span className="inline-flex items-center gap-2"><UserRound className="size-4 text-ink-500" aria-hidden />{user ? `${user.firstName} ${user.lastName}` : "—"}</span>} />
+          <Row label="Email" value={user?.email ?? "—"} />
+          <Row label="Role" value={<Badge tone="navy">{user?.role.replace(/_/g, " ") ?? "—"}</Badge>} />
+          <Row label="User ID" value={<span className="font-mono text-xs">{user?.userPublicId ?? "—"}</span>} />
         </Panel>
 
-        {ops.data && (
-          <Panel title="API process">
-            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              {[
-                ["Uptime", age(ops.data.process.uptimeSeconds)],
-                ["Node", ops.data.process.nodeVersion],
-                ["RSS memory", mb(ops.data.process.memory.rssBytes)],
-                ["Heap used", `${mb(ops.data.process.memory.heapUsedBytes)} / ${mb(ops.data.process.memory.heapTotalBytes)}`]
-              ].map(([label, value]) => (
-                <div key={label} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <dt className="text-[10px] font-bold uppercase text-gray-400">{label}</dt>
-                  <dd className="mt-1 font-black text-gray-900">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </Panel>
-        )}
-
-        <Panel title="Pricing" description="Prices are set per product (annual or monthly) and take effect for new orders.">
-          <Link href="/admin/products" className={btnDark}>
-            <Tags size={14} className="text-secondary-400" /> Manage products & pricing
-          </Link>
+        <Panel>
+          <PanelHeader title="Environment" description="Build-time configuration of this deployment." />
+          <Row label="API mode" value={<Badge tone={env.apiMode === "live" ? "ok" : "warn"} dot>{env.apiMode}</Badge>} />
+          <Row label="API base" value={<span className="inline-flex items-center gap-1.5 font-mono text-xs"><Globe2 className="size-3.5 text-ink-500" aria-hidden />{env.apiBaseUrl || "same-origin proxy"}</span>} />
+          <Row label="Environment" value={env.environment} />
+          <Row
+            label="Database"
+            value={
+              health.data ? (
+                <Badge tone="ok" dot>Reachable</Badge>
+              ) : health.isError ? (
+                <Badge tone="bad" dot>Unavailable</Badge>
+              ) : (
+                <Badge tone="neutral">Checking…</Badge>
+              )
+            }
+          />
         </Panel>
       </div>
-    </AdminPage>
+
+      <Panel className="mt-6">
+        <PanelHeader title="Service health" description="Live queue snapshot from the backend observability endpoint." action={<ShieldCheck className="size-5 text-ok" aria-hidden />} />
+        {health.data ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Audit queue</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.auditQueue.pending)}</p>
+              <p className="text-xs text-ink-600">pending</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Webhooks</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.webhooks.failed)}</p>
+              <p className="text-xs text-ink-600">failed</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Notifications</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.email.pending)}</p>
+              <p className="text-xs text-ink-600">queued</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-600"><Database className="size-3.5" aria-hidden /> Workers</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{health.data.workers.filter((w) => w.ok).length}/{health.data.workers.length}</p>
+              <p className="text-xs text-ink-600">healthy</p>
+            </div>
+          </div>
+        ) : (
+          <p className="py-6 text-sm text-ink-600">{health.isError ? "Could not reach the health endpoint." : "Loading…"}</p>
+        )}
+      </Panel>
+    </>
   );
 }
