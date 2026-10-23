@@ -443,13 +443,13 @@ export const liveApi = {
       const raw = await http<any>("GET", `/api/platform/agencies/${publicId}`);
       return mapAgencySummary(raw.agency ?? raw);
     },
-    async createAgency(input: { legalName: string; displayName: string; slug: string; billingEmail?: string }): Promise<AgencySummary> {
+    async createAgency(input: { legalName: string; displayName: string; slug: string; billingEmail: string }): Promise<AgencySummary> {
       const raw = await http<{ agency: any }>("POST", "/api/agencies", input);
       return mapAgencySummary(raw.agency);
     },
-    /** Platform staff invite an agency's administrator; the backend emails a set-password link. */
+    /** Platform staff invite an agency's first administrator; the person finishes sign-up from the emailed link. */
     async inviteAgencyAdmin(agencyPublicId: string, email: string): Promise<void> {
-      await http("POST", `/api/agencies/${agencyPublicId}/invitations`, { email, roleCode: "agency_admin" });
+      await http("POST", `/api/agencies/${agencyPublicId}/invitations`, { email: email.trim(), roleCode: "agency_admin" });
     },
     async setAgencyStatus(publicId: string, status: "active" | "suspended"): Promise<void> {
       await http("PATCH", `/api/platform/agencies/${publicId}`, { status });

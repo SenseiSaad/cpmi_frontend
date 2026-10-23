@@ -389,18 +389,21 @@ export const mockApi = {
       await delay(220);
       return clone(state.agencies.find((a) => a.publicId === publicId) ?? fail("not_found", "Agency not found"));
     },
-    async createAgency(input: { legalName: string; displayName: string; slug: string; billingEmail?: string }): Promise<AgencySummary> {
+    async createAgency(input: { legalName: string; displayName: string; slug: string; billingEmail: string }): Promise<AgencySummary> {
       await delay(700);
+      if (!emailOk(input.billingEmail.trim().toLowerCase())) fail("validation_failed", "Enter a valid billing email address");
       if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(input.slug)) fail("validation_failed", "Slug must be lowercase alphanumeric with single hyphens");
       if (state.agencies.some((a) => a.slug === input.slug)) fail("conflict", "An agency with this name or slug already exists");
       const created: AgencySummary = { publicId: `ag-${nextId()}`, slug: input.slug, displayName: input.displayName, legalName: input.legalName, status: "active", billingEmail: input.billingEmail ?? null, memberCount: 0, seatsUsed: 0, seatCapacity: 0, createdAt: DEMO_NOW.toISOString(), state: "—" };
       state.agencies.unshift(created);
       return clone(created);
     },
+    /** Platform staff invite an agency's first administrator; the person finishes sign-up from the emailed link. */
     async inviteAgencyAdmin(agencyPublicId: string, email: string): Promise<void> {
-      await delay(300);
+      await delay(450);
+      const e = email.trim().toLowerCase();
+      if (!emailOk(e)) fail("validation_failed", "Enter a valid email address");
       if (!state.agencies.some((a) => a.publicId === agencyPublicId)) fail("not_found", "Agency not found");
-      if (!email.includes("@")) fail("validation_failed", "Enter a valid email address");
     },
     async setAgencyStatus(publicId: string, status: "active" | "suspended"): Promise<void> {
       await delay(450);

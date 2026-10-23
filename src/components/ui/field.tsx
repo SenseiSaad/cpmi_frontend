@@ -13,20 +13,30 @@ interface FieldProps {
   hint?: string;
   error?: string;
   optional?: boolean;
+  /** Shows a visible "required" marker (and announces it to screen readers). */
+  required?: boolean;
   children: (ids: { id: string; describedBy: string | undefined; invalid: boolean }) => ReactNode;
   className?: string;
 }
 
 /** Label + control + hint/error wired together with ids (WCAG 1.3.1 / 3.3.1). */
-export function Field({ label, hint, error, optional, children, className }: FieldProps) {
+export function Field({ label, hint, error, optional, required, children, className }: FieldProps) {
   const id = useId();
   const hintId = hint ? `${id}-hint` : undefined;
   const errId = error ? `${id}-err` : undefined;
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <label htmlFor={id} className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+    <div className={cn("space-y-1.5 text-left", className)}>
+      <label htmlFor={id} className="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
         {label}
-        {optional ? <span className="text-xs font-medium text-ink-500">Optional</span> : null}
+        {required ? (
+          <>
+            <span className="text-bad" aria-hidden>
+              *
+            </span>
+            <span className="sr-only">(required)</span>
+          </>
+        ) : null}
+        {optional ? <span className="ml-0.5 text-xs font-medium text-ink-500">Optional</span> : null}
       </label>
       {children({ id, describedBy: [hintId, errId].filter(Boolean).join(" ") || undefined, invalid: !!error })}
       {hint && !error ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, MailPlus, Plus, Search } from "lucide-react";
+import { Building2, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -28,24 +28,46 @@ function slugify(value: string): string {
     .slice(0, 100);
 }
 
+const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface AgencyForm {
+  legalName: string;
+  displayName: string;
+  slug: string;
+  billingEmail: string;
+  adminEmail: string;
+}
+type FormErrors = Partial<Record<keyof AgencyForm, string>>;
+
+const EMPTY_FORM: AgencyForm = { legalName: "", displayName: "", slug: "", billingEmail: "", adminEmail: "" };
+
+function emailError(value: string, what: string): string | undefined {
+  if (!value.trim()) return `Enter ${what}`;
+  if (!EMAIL_PATTERN.test(value.trim())) return "Enter a valid email address, like name@agency.gov";
+  return undefined;
+}
+
 export default function AdminAgenciesPage() {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ legalName: "", displayName: "", slug: "", adminEmail: "" });
+  const [form, setForm] = useState<AgencyForm>(EMPTY_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
   const [slugEdited, setSlugEdited] = useState(false);
-  const [inviteFor, setInviteFor] = useState<AgencySummary | null>(null);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const toast = useToast();
+  const [adminEdited, setAdminEdited] = useState(false);
+  // Set once the agency exists, so a failed invitation can be retried without creating it twice.
+  const [createdAgency, setCreatedAgency] = useState<AgencySummary | null>(null);
 
   const query = useAgencies({ search: appliedSearch || undefined, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   const create = useAction(api.platform.createAgency, {
     invalidate: ["agencies"],
     success: "Agency created",
   });
+  const invite = useAction(api.platform.inviteAgencyAdmin, { invalidate: ["agencies"] });
+  const toast = useToast();
   const setStatus = useAction(api.platform.setAgencyStatus, { invalidate: ["agencies"] });
-  const inviteAdmin = useAction(api.platform.inviteAgencyAdmin, { success: "Invitation sent" });
 
   const pageCount = Math.max(1, Math.ceil((query.data?.total ?? 0) / PAGE_SIZE));
 
@@ -86,55 +108,71 @@ export default function AdminAgenciesPage() {
       {
         key: "actions",
         header: "Actions",
-        width: "270px",
+        width: "140px",
+        align: "right",
         cell: (a) =>
           a.status === "closed" ? (
             <span className="text-xs text-ink-500">Closed</span>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              <Button variant="soft" size="sm" icon={<MailPlus className="size-4" aria-hidden />} onClick={() => { setInviteEmail(""); setInviteFor(a); }}>
-                Invite admin
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => void setStatus.run(a.publicId, a.status === "suspended" ? "active" : "suspended")}>
-                {a.status === "suspended" ? "Reactivate" : "Suspend"}
-              </Button>
-            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void setStatus.run(a.publicId, a.status === "suspended" ? "active" : "suspended")}
+            >
+              {a.status === "suspended" ? "Reactivate" : "Suspend"}
+            </Button>
           ),
       },
     ],
     [setStatus],
   );
 
-  function resetForm() {
-    setForm({ legalName: "", displayName: "", slug: "", adminEmail: "" });
-    setSlugEdited(false);
-  }
-
-  async function submitCreate(event: React.FormEvent) {
-    event.preventDefault();
-    const displayName = form.displayName.trim();
-    const legalName = form.legalName.trim() || displayName;
-    const slug = form.slug.trim() || slugify(displayName);
-    const adminEmail = form.adminEmail.trim().toLowerCase();
-    if (!displayName || !slug || !adminEmail) return;
-    const created = await create.run({ displayName, legalName, slug, billingEmail: adminEmail });
-    if (!created || created === true) return;
+  function closeCreate() {
     setCreateOpen(false);
-    resetForm();
-    const invited = await inviteAdmin.run(created.publicId, adminEmail);
-    if (invited === undefined) {
-      toast.error("Agency created, but the invitation was not sent", "Use \"Invite admin\" on the agency row to try again.");
-    }
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setSlugEdited(false);
+    setAdminEdited(false);
+    setCreatedAgency(null);
   }
 
-  async function submitInvite(event: React.FormEvent) {
+  async function submitCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const email = inviteEmail.trim().toLowerCase();
-    if (!inviteFor || !email) return;
-    const ok = await inviteAdmin.run(inviteFor.publicId, email);
-    if (ok === undefined) return;
-    setInviteFor(null);
-    setInviteEmail("");
+    const formEl = event.currentTarget;
+    const displayName = form.displayName.trim();
+    const slug = form.slug.trim() || slugify(displayName);
+
+    const found: FormErrors = {};
+    if (!displayName) found.displayName = "Enter the agency name";
+    if (slug.length < 2 || !SLUG_PATTERN.test(slug)) found.slug = "Use at least 2 characters: lowercase letters, numbers and single hyphens";
+    const billing = emailError(form.billingEmail, "the billing email address");
+    if (billing) found.billingEmail = billing;
+    const admin = emailError(form.adminEmail, "the administrator's email address");
+    if (admin) found.adminEmail = admin;
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      // Move the cursor to the first field that needs attention.
+      window.setTimeout(() => formEl.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(), 0);
+      return;
+    }
+
+    let agency = createdAgency;
+    if (!agency) {
+      const created = await create.run({
+        displayName,
+        legalName: form.legalName.trim() || displayName,
+        slug,
+        billingEmail: form.billingEmail.trim(),
+      });
+      if (!created || created === true) return;
+      agency = created;
+      setCreatedAgency(created);
+    }
+
+    const sent = await invite.run(agency.publicId, form.adminEmail.trim());
+    if (!sent) return; // The agency exists; the dialog stays open so the invitation can be retried.
+    toast.success("Invitation sent", `${form.adminEmail.trim()} will receive an email to create their account.`);
+    closeCreate();
   }
 
   return (
@@ -203,71 +241,110 @@ export default function AdminAgenciesPage() {
 
       <Modal
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={closeCreate}
         title="New agency"
-        description="Creates the agency and emails its administrator a link to set their own password. They then sign in with that email."
+        description="Creates the agency and emails its administrator an invitation to create their account."
         footer={
           <>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" form="new-agency-form" loading={create.pending || inviteAdmin.pending} icon={<Building2 className="size-4" aria-hidden />}>
-              Create agency &amp; send invitation
+            <Button variant="ghost" onClick={closeCreate}>{createdAgency ? "Close" : "Cancel"}</Button>
+            <Button type="submit" form="new-agency-form" loading={create.pending || invite.pending} icon={<Building2 className="size-4" aria-hidden />}>
+              {createdAgency ? "Retry invitation" : "Create agency & send invitation"}
             </Button>
           </>
         }
       >
-        <form id="new-agency-form" className="space-y-4" onSubmit={(e) => void submitCreate(e)}>
-          <Field label="Agency name">
-            {({ id, describedBy }) => (
+        <form id="new-agency-form" className="space-y-4 text-left" onSubmit={submitCreate} noValidate>
+          {createdAgency ? (
+            <p role="alert" className="rounded-xl bg-warn-bg p-3 text-sm font-medium text-warn">
+              <strong>{createdAgency.displayName}</strong> was created, but the invitation email could not be sent. Check the address
+              below and retry. The agency will not be created again.
+            </p>
+          ) : null}
+          <Field label="Agency name" required error={errors.displayName}>
+            {({ id, describedBy, invalid }) => (
               <Input
                 id={id}
                 aria-describedby={describedBy}
+                invalid={invalid}
                 data-autofocus
-                required
+                autoComplete="organization"
+                disabled={!!createdAgency}
                 value={form.displayName}
                 onChange={(e) => {
                   const displayName = e.target.value;
                   setForm((f) => ({ ...f, displayName, slug: slugEdited ? f.slug : slugify(displayName) }));
+                  setErrors((er) => ({ ...er, displayName: undefined }));
                 }}
                 placeholder="Texas Department of Transportation"
               />
             )}
           </Field>
-          <Field label="Administrator email" hint="The person who will run this agency. They receive the invitation here and use this email to sign in.">
+          <Field label="Legal name" optional hint="Leave blank to use the agency name.">
             {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} type="email" required autoComplete="off" value={form.adminEmail} onChange={(e) => setForm((f) => ({ ...f, adminEmail: e.target.value }))} placeholder="admin@agency.gov" />
+              <Input id={id} aria-describedby={describedBy} disabled={!!createdAgency} value={form.legalName} onChange={(e) => setForm((f) => ({ ...f, legalName: e.target.value }))} placeholder="Texas DOT" />
             )}
           </Field>
-          <Field label="Legal name" optional hint="Defaults to the agency name.">
-            {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} value={form.legalName} onChange={(e) => setForm((f) => ({ ...f, legalName: e.target.value }))} placeholder="Texas DOT" />
+          <Field label="Slug" required hint="Lowercase letters, numbers and single hyphens. Used in report filenames." error={errors.slug}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                invalid={invalid}
+                disabled={!!createdAgency}
+                autoCapitalize="none"
+                spellCheck={false}
+                value={form.slug}
+                onChange={(e) => {
+                  setSlugEdited(true);
+                  setForm((f) => ({ ...f, slug: e.target.value.toLowerCase() }));
+                  setErrors((er) => ({ ...er, slug: undefined }));
+                }}
+                placeholder="texas-dot"
+              />
             )}
           </Field>
-          <Field label="Slug" hint="Lowercase letters, numbers and single hyphens. Used in report filenames.">
-            {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} required minLength={2} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={form.slug} onChange={(e) => { setSlugEdited(true); setForm((f) => ({ ...f, slug: e.target.value.toLowerCase() })); }} placeholder="texas-dot" />
+          <Field label="Billing email" required hint="Invoices and payment notices go here." error={errors.billingEmail}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                invalid={invalid}
+                type="email"
+                inputMode="email"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                disabled={!!createdAgency}
+                value={form.billingEmail}
+                onChange={(e) => {
+                  const billingEmail = e.target.value;
+                  // Until it is edited by hand, the administrator's address follows the billing address.
+                  setForm((f) => ({ ...f, billingEmail, adminEmail: adminEdited ? f.adminEmail : billingEmail }));
+                  setErrors((er) => ({ ...er, billingEmail: undefined, ...(adminEdited ? {} : { adminEmail: undefined }) }));
+                }}
+                placeholder="billing@agency.gov"
+              />
             )}
           </Field>
-        </form>
-      </Modal>
-
-      <Modal
-        open={!!inviteFor}
-        onClose={() => setInviteFor(null)}
-        title={inviteFor ? `Invite an administrator — ${inviteFor.displayName}` : "Invite an administrator"}
-        description="They get an email with a link to choose a password, then sign in with this email address."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setInviteFor(null)}>Cancel</Button>
-            <Button type="submit" form="invite-admin-form" loading={inviteAdmin.pending} icon={<MailPlus className="size-4" aria-hidden />}>
-              Send invitation
-            </Button>
-          </>
-        }
-      >
-        <form id="invite-admin-form" className="space-y-4" onSubmit={(e) => void submitInvite(e)}>
-          <Field label="Administrator email">
-            {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} data-autofocus type="email" required autoComplete="off" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="admin@agency.gov" />
+          <Field label="Administrator email" required hint="This person gets an email with a link to create their account and sign in with this address." error={errors.adminEmail}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                invalid={invalid}
+                type="email"
+                inputMode="email"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={form.adminEmail}
+                onChange={(e) => {
+                  setAdminEdited(true);
+                  setForm((f) => ({ ...f, adminEmail: e.target.value }));
+                  setErrors((er) => ({ ...er, adminEmail: undefined }));
+                }}
+                placeholder="director@agency.gov"
+              />
             )}
           </Field>
         </form>

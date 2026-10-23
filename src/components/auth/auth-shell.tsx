@@ -91,15 +91,15 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
         <div className="flex items-center justify-between px-6 py-5 lg:hidden">
           <Logo tone="dark" />
         </div>
-        <div className="flex flex-1 items-center justify-center px-5 pb-10 pt-2 sm:px-10 lg:py-12">
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="w-full max-w-md">
+        <div className="flex flex-1 items-center justify-start px-5 pb-10 pt-2 sm:px-10 lg:px-16 lg:py-12 xl:px-24">
+          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="w-full max-w-md text-left">
             <h1 className="text-balance text-3xl font-extrabold tracking-tight text-navy-900">{title}</h1>
             {subtitle ? <p className="mt-2 text-pretty text-ink-600">{subtitle}</p> : null}
             <div className="mt-8">{children}</div>
-            {footer ? <div className="mt-8 text-center text-sm text-ink-600">{footer}</div> : null}
+            {footer ? <div className="mt-8 text-left text-sm text-ink-600">{footer}</div> : null}
           </motion.div>
         </div>
-        <p className="pb-6 text-center text-xs text-ink-500">
+        <p className="px-5 pb-6 text-left text-xs text-ink-500 sm:px-10 lg:px-16 xl:px-24">
           <Link href="/" className="font-medium underline-offset-4 hover:underline">
             Back to home
           </Link>

@@ -37,6 +37,8 @@ function useDialog(open: boolean, onClose: () => void) {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     lenisRef.current?.stop();
     const timer = window.setTimeout(() => {
+      // Never take focus back from a field the person has already started using.
+      if (panel.current?.contains(document.activeElement) && document.activeElement !== panel.current) return;
       const first = panel.current?.querySelector<HTMLElement>("[data-autofocus]") ?? panel.current?.querySelector<HTMLElement>(FOCUSABLE);
       first?.focus();
     }, 30);

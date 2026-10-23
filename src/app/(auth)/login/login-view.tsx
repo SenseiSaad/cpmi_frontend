@@ -44,7 +44,8 @@ export function LoginView() {
   async function onSubmit(values: Values) {
     setFormError(null);
     try {
-      const user = await api.auth.login(values.email, values.password);
+      // Email addresses are not case-sensitive; send them in a consistent form.
+      const user = await api.auth.login(values.email.trim().toLowerCase(), values.password);
       await refresh();
       router.push(safeNext(params.get("next"), user.role));
     } catch (error) {
@@ -55,7 +56,7 @@ export function LoginView() {
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Sign in to continue your training or manage your agency."
+      subtitle="Sign in with the email address you used to create your account."
       footer={
         <>
           New here? Accounts are created by invitation — check your email for an invite link, or{" "}
@@ -73,7 +74,7 @@ export function LoginView() {
           </motion.div>
         ) : null}
         <Field label="Email address" error={errors.email?.message}>
-          {({ id, describedBy, invalid }) => <Input id={id} type="email" autoComplete="username" inputMode="email" placeholder="you@agency.gov" leading={<Mail className="size-4" aria-hidden />} invalid={invalid} aria-describedby={describedBy} {...register("email")} />}
+          {({ id, describedBy, invalid }) => <Input id={id} type="email" autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false} placeholder="name@email.com" leading={<Mail className="size-4" aria-hidden />} invalid={invalid} aria-describedby={describedBy} {...register("email")} />}
         </Field>
         <Field label="Password" error={errors.password?.message}>
           {({ id, describedBy, invalid }) => <Input id={id} type="password" autoComplete="current-password" placeholder="Your password" leading={<KeyRound className="size-4" aria-hidden />} invalid={invalid} aria-describedby={describedBy} {...register("password")} />}
