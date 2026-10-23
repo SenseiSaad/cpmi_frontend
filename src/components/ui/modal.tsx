@@ -24,11 +24,18 @@ interface BaseProps {
 function useDialog(open: boolean, onClose: () => void) {
   const panel = useRef<HTMLDivElement>(null);
   const lenis = useLenis();
+  // Callers pass inline handlers (new identity every render). Keep them in refs so the
+  // effect below runs only when the dialog opens/closes - re-running it on every keystroke
+  // re-focused the first field and stole the user's typing.
+  const onCloseRef = useRef(onClose);
+  const lenisRef = useRef(lenis);
+  onCloseRef.current = onClose;
+  lenisRef.current = lenis;
 
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    lenis?.stop();
+    lenisRef.current?.stop();
     const timer = window.setTimeout(() => {
       const first = panel.current?.querySelector<HTMLElement>("[data-autofocus]") ?? panel.current?.querySelector<HTMLElement>(FOCUSABLE);
       first?.focus();
@@ -37,7 +44,7 @@ function useDialog(open: boolean, onClose: () => void) {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panel.current) return;
@@ -57,10 +64,10 @@ function useDialog(open: boolean, onClose: () => void) {
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("keydown", onKey);
-      lenis?.start();
+      lenisRef.current?.start();
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose, lenis]);
+  }, [open]);
 
   return panel;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Plus, Search } from "lucide-react";
+import { Building2, MailPlus, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,6 +11,7 @@ import { Field, Input } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { Panel } from "@/components/ui/panel";
 import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { useAction, useAgencies } from "@/lib/api/hooks";
 import type { AgencySummary } from "@/lib/api/types";
@@ -32,7 +33,11 @@ export default function AdminAgenciesPage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ legalName: "", displayName: "", slug: "", billingEmail: "" });
+  const [form, setForm] = useState({ legalName: "", displayName: "", slug: "", adminEmail: "" });
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [inviteFor, setInviteFor] = useState<AgencySummary | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const toast = useToast();
 
   const query = useAgencies({ search: appliedSearch || undefined, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   const create = useAction(api.platform.createAgency, {
@@ -40,6 +45,7 @@ export default function AdminAgenciesPage() {
     success: "Agency created",
   });
   const setStatus = useAction(api.platform.setAgencyStatus, { invalidate: ["agencies"] });
+  const inviteAdmin = useAction(api.platform.inviteAgencyAdmin, { success: "Invitation sent" });
 
   const pageCount = Math.max(1, Math.ceil((query.data?.total ?? 0) / PAGE_SIZE));
 
@@ -80,43 +86,55 @@ export default function AdminAgenciesPage() {
       {
         key: "actions",
         header: "Actions",
-        width: "140px",
-        align: "right",
+        width: "270px",
         cell: (a) =>
           a.status === "closed" ? (
             <span className="text-xs text-ink-500">Closed</span>
           ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void setStatus.run(a.publicId, a.status === "suspended" ? "active" : "suspended")}
-            >
-              {a.status === "suspended" ? "Reactivate" : "Suspend"}
-            </Button>
+            <div className="flex flex-wrap gap-1.5">
+              <Button variant="soft" size="sm" icon={<MailPlus className="size-4" aria-hidden />} onClick={() => { setInviteEmail(""); setInviteFor(a); }}>
+                Invite admin
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => void setStatus.run(a.publicId, a.status === "suspended" ? "active" : "suspended")}>
+                {a.status === "suspended" ? "Reactivate" : "Suspend"}
+              </Button>
+            </div>
           ),
       },
     ],
     [setStatus],
   );
 
-  function submitCreate(event: React.FormEvent) {
+  function resetForm() {
+    setForm({ legalName: "", displayName: "", slug: "", adminEmail: "" });
+    setSlugEdited(false);
+  }
+
+  async function submitCreate(event: React.FormEvent) {
     event.preventDefault();
     const displayName = form.displayName.trim();
     const legalName = form.legalName.trim() || displayName;
     const slug = form.slug.trim() || slugify(displayName);
-    if (!displayName || !slug) return;
-    void create
-      .run({
-        displayName,
-        legalName,
-        slug,
-        ...(form.billingEmail.trim() ? { billingEmail: form.billingEmail.trim() } : {}),
-      })
-      .then((result) => {
-        if (!result) return;
-        setCreateOpen(false);
-        setForm({ legalName: "", displayName: "", slug: "", billingEmail: "" });
-      });
+    const adminEmail = form.adminEmail.trim().toLowerCase();
+    if (!displayName || !slug || !adminEmail) return;
+    const created = await create.run({ displayName, legalName, slug, billingEmail: adminEmail });
+    if (!created || created === true) return;
+    setCreateOpen(false);
+    resetForm();
+    const invited = await inviteAdmin.run(created.publicId, adminEmail);
+    if (invited === undefined) {
+      toast.error("Agency created, but the invitation was not sent", "Use \"Invite admin\" on the agency row to try again.");
+    }
+  }
+
+  async function submitInvite(event: React.FormEvent) {
+    event.preventDefault();
+    const email = inviteEmail.trim().toLowerCase();
+    if (!inviteFor || !email) return;
+    const ok = await inviteAdmin.run(inviteFor.publicId, email);
+    if (ok === undefined) return;
+    setInviteFor(null);
+    setInviteEmail("");
   }
 
   return (
@@ -187,18 +205,18 @@ export default function AdminAgenciesPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="New agency"
-        description="Creates a tenant. Invite its first administrator from the agency's team page afterwards."
+        description="Creates the agency and emails its administrator a link to set their own password. They then sign in with that email."
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" form="new-agency-form" loading={create.pending} icon={<Building2 className="size-4" aria-hidden />}>
-              Create agency
+            <Button type="submit" form="new-agency-form" loading={create.pending || inviteAdmin.pending} icon={<Building2 className="size-4" aria-hidden />}>
+              Create agency &amp; send invitation
             </Button>
           </>
         }
       >
-        <form id="new-agency-form" className="space-y-4" onSubmit={submitCreate}>
-          <Field label="Display name">
+        <form id="new-agency-form" className="space-y-4" onSubmit={(e) => void submitCreate(e)}>
+          <Field label="Agency name">
             {({ id, describedBy }) => (
               <Input
                 id={id}
@@ -208,25 +226,48 @@ export default function AdminAgenciesPage() {
                 value={form.displayName}
                 onChange={(e) => {
                   const displayName = e.target.value;
-                  setForm((f) => ({ ...f, displayName, slug: f.slug || slugify(displayName) }));
+                  setForm((f) => ({ ...f, displayName, slug: slugEdited ? f.slug : slugify(displayName) }));
                 }}
                 placeholder="Texas Department of Transportation"
               />
             )}
           </Field>
-          <Field label="Legal name" optional>
+          <Field label="Administrator email" hint="The person who will run this agency. They receive the invitation here and use this email to sign in.">
+            {({ id, describedBy }) => (
+              <Input id={id} aria-describedby={describedBy} type="email" required autoComplete="off" value={form.adminEmail} onChange={(e) => setForm((f) => ({ ...f, adminEmail: e.target.value }))} placeholder="admin@agency.gov" />
+            )}
+          </Field>
+          <Field label="Legal name" optional hint="Defaults to the agency name.">
             {({ id, describedBy }) => (
               <Input id={id} aria-describedby={describedBy} value={form.legalName} onChange={(e) => setForm((f) => ({ ...f, legalName: e.target.value }))} placeholder="Texas DOT" />
             )}
           </Field>
           <Field label="Slug" hint="Lowercase letters, numbers and single hyphens. Used in report filenames.">
             {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} placeholder="texas-dot" />
+              <Input id={id} aria-describedby={describedBy} required minLength={2} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={form.slug} onChange={(e) => { setSlugEdited(true); setForm((f) => ({ ...f, slug: e.target.value.toLowerCase() })); }} placeholder="texas-dot" />
             )}
           </Field>
-          <Field label="Billing email" optional>
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!inviteFor}
+        onClose={() => setInviteFor(null)}
+        title={inviteFor ? `Invite an administrator — ${inviteFor.displayName}` : "Invite an administrator"}
+        description="They get an email with a link to choose a password, then sign in with this email address."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setInviteFor(null)}>Cancel</Button>
+            <Button type="submit" form="invite-admin-form" loading={inviteAdmin.pending} icon={<MailPlus className="size-4" aria-hidden />}>
+              Send invitation
+            </Button>
+          </>
+        }
+      >
+        <form id="invite-admin-form" className="space-y-4" onSubmit={(e) => void submitInvite(e)}>
+          <Field label="Administrator email">
             {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} type="email" value={form.billingEmail} onChange={(e) => setForm((f) => ({ ...f, billingEmail: e.target.value }))} placeholder="billing@agency.gov" />
+              <Input id={id} aria-describedby={describedBy} data-autofocus type="email" required autoComplete="off" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="admin@agency.gov" />
             )}
           </Field>
         </form>

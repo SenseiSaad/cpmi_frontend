@@ -144,7 +144,10 @@ export const usePlatformOrders = (q: { limit?: number; offset?: number }) =>
   });
 
 export function describeError(error: unknown): string {
-  if (error instanceof ApiClientError) return error.message;
+  if (error instanceof ApiClientError) {
+    const detail = error.details?.[0];
+    return detail ? `${error.message}: ${detail.field} - ${detail.message}` : error.message;
+  }
   if (error instanceof Error) return error.message;
   return "Something went wrong. Please try again.";
 }

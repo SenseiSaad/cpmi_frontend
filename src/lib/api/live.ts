@@ -447,6 +447,10 @@ export const liveApi = {
       const raw = await http<{ agency: any }>("POST", "/api/agencies", input);
       return mapAgencySummary(raw.agency);
     },
+    /** Platform staff invite an agency's administrator; the backend emails a set-password link. */
+    async inviteAgencyAdmin(agencyPublicId: string, email: string): Promise<void> {
+      await http("POST", `/api/agencies/${agencyPublicId}/invitations`, { email, roleCode: "agency_admin" });
+    },
     async setAgencyStatus(publicId: string, status: "active" | "suspended"): Promise<void> {
       await http("PATCH", `/api/platform/agencies/${publicId}`, { status });
     },

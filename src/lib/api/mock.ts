@@ -397,6 +397,11 @@ export const mockApi = {
       state.agencies.unshift(created);
       return clone(created);
     },
+    async inviteAgencyAdmin(agencyPublicId: string, email: string): Promise<void> {
+      await delay(300);
+      if (!state.agencies.some((a) => a.publicId === agencyPublicId)) fail("not_found", "Agency not found");
+      if (!email.includes("@")) fail("validation_failed", "Enter a valid email address");
+    },
     async setAgencyStatus(publicId: string, status: "active" | "suspended"): Promise<void> {
       await delay(450);
       const agency = state.agencies.find((a) => a.publicId === publicId) ?? fail("not_found", "Agency not found");
