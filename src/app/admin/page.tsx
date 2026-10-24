@@ -1,260 +1,162 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import {
-  DollarSign,
-  Users,
-  TrendingUp,
-  Building2,
-  LayoutDashboard,
-  BookOpen,
-  BarChart3,
-  Settings,
-  Award,
-  Calendar,
-  Filter,
-  Download,
-  CheckCircle,
-  ExternalLink,
-} from "lucide-react";
+import { Building2, DollarSign, GraduationCap, TrendingUp } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import DashboardShell from "@/components/layout/DashboardShell";
-import { AdminSidebar } from "@/components/layout/SidebarNav";
-import Card from "@/components/ui/Card";
-import { adminStats, agencies, revenueData, topAgenciesData } from "@/lib/data";
-import { formatCurrency } from "@/lib/utils";
+
+import { AreaChart } from "@/components/charts/charts";
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { StatCard } from "@/components/ui/stat-card";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { useAgencies, useAllOrders, useKpis } from "@/lib/api/hooks";
+import type { AgencySummary, Order } from "@/lib/api/types";
+import { formatCurrency, formatNumber, relativeDays } from "@/lib/utils";
+
+const agencyColumns: Column<AgencySummary>[] = [
+  {
+    key: "name",
+    header: "Agency",
+    width: "minmax(0,2fr)",
+    cell: (a) => (
+      <div className="min-w-0">
+        <p className="truncate font-semibold text-ink-900">{a.displayName}</p>
+        <p className="truncate text-xs text-ink-600">{a.slug}</p>
+      </div>
+    ),
+  },
+  { key: "members", header: "Members", width: "100px", align: "right", cell: (a) => <span className="tnum font-semibold">{formatNumber(a.memberCount)}</span> },
+  { key: "seats", header: "Seats used", width: "110px", align: "right", cell: (a) => <span className="tnum font-semibold">{formatNumber(a.seatsUsed)}</span> },
+  { key: "status", header: "Status", width: "120px", cell: (a) => <StatusPill status={a.status} /> },
+  { key: "created", header: "Onboarded", width: "130px", cell: (a) => <span className="text-ink-600">{a.createdAt ? relativeDays(a.createdAt) : "—"}</span> },
+];
+
+const orderColumns: Column<Order>[] = [
+  {
+    key: "order",
+    header: "Order",
+    width: "minmax(0,1.6fr)",
+    cell: (o) => (
+      <div>
+        <p className="font-semibold text-ink-900">{o.item?.productName ?? "Order"}</p>
+        <p className="font-mono text-xs text-ink-600">{o.publicId.slice(0, 13)}…</p>
+      </div>
+    ),
+  },
+  { key: "agency", header: "Agency", width: "minmax(0,1.2fr)", cell: (o) => <span className="truncate text-ink-700">{o.agencyName ?? "—"}</span> },
+  { key: "total", header: "Total", width: "100px", align: "right", cell: (o) => <span className="tnum font-semibold">{formatCurrency(o.totalMinor / 100)}</span> },
+  { key: "status", header: "Status", width: "110px", cell: (o) => <StatusPill status={o.status} /> },
+  { key: "created", header: "Created", width: "120px", cell: (o) => <span className="text-ink-600">{o.createdAt ? relativeDays(o.createdAt) : "—"}</span> },
+];
 
 export default function AdminDashboardPage() {
-  const [dateRange, setDateRange] = useState("Apr 1, 2026 - Apr 30, 2026");
+  const kpis = useKpis();
+  const agencies = useAgencies({ limit: 5 });
+  const orders = useAllOrders({ limit: 5 });
 
-  const adminHeader = (
-    <div className="flex items-center gap-4">
-      <div>
-        <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight">
-          Super Admin Dashboard
-        </h1>
-        <p className="text-xs text-gray-500 font-medium">
-          Platform-wide telemetry, multi-agency subscriptions, and accreditation metrics
-        </p>
-      </div>
+  const series = (kpis.data?.revenueSeries ?? []).map((point) => ({
+    label: point.label.slice(5) === "" ? point.label : new Date(`${point.label}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short" }),
+    value: point.value / 100,
+  }));
 
-      <div className="hidden md:flex items-center gap-2 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700">
-        <Calendar size={13} className="text-secondary-600" />
-        <span>{dateRange}</span>
-      </div>
-    </div>
-  );
-
-  const kpis = [
-    {
-      label: "Total Revenue",
-      value: formatCurrency(adminStats.totalRevenue),
-      trend: `+${adminStats.revenueGrowth}%`,
-      icon: DollarSign,
-      color: "text-emerald-700",
-      bg: "bg-emerald-50",
-    },
-    {
-      label: "Total Enrollments",
-      value: adminStats.totalLearners.toLocaleString(),
-      trend: `+${adminStats.learnersGrowth}%`,
-      icon: Users,
-      color: "text-primary-700",
-      bg: "bg-primary-50",
-    },
-    {
-      label: "Course Completion",
-      value: `${adminStats.completionRate}%`,
-      trend: `+${adminStats.completionChange}%`,
-      icon: TrendingUp,
-      color: "text-secondary-700",
-      bg: "bg-secondary-50",
-    },
-    {
-      label: "Total Agencies",
-      value: adminStats.totalAgencies,
-      trend: `+${adminStats.agenciesChange}%`,
-      icon: Building2,
-      color: "text-blue-700",
-      bg: "bg-blue-50",
-    },
-  ];
+  const topAgencies = [...(agencies.data?.items ?? [])].sort((a, b) => b.memberCount - a.memberCount).slice(0, 5);
 
   return (
-    <DashboardShell sidebar={<AdminSidebar />} headerContent={adminHeader}>
-      <div className="space-y-8">
-        {/* TOP 4 KPI CARDS (Screen 7 Direct Reference) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {kpis.map(({ label, value, trend, icon: Icon, color, bg }, idx) => (
-            <motion.div
-              key={label}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.08 }}
-              className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-xs hover:shadow-sm transition-all"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold text-gray-500">{label}</span>
-                <span className="text-xs font-bold text-highlight-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                  {trend}
-                </span>
-              </div>
-              <p className="text-2xl sm:text-3xl font-black text-gray-900">{value}</p>
-            </motion.div>
-          ))}
+    <>
+      <PageHeader
+        eyebrow="Platform"
+        title="Operations overview"
+        subtitle="Platform-wide revenue, agency activity and learner outcomes."
+        actions={<ButtonLink href="/admin/reports" variant="secondary">View reports</ButtonLink>}
+      />
+
+      {kpis.isError ? (
+        <Panel><ErrorState message={kpis.error instanceof Error ? kpis.error.message : undefined} onRetry={() => void kpis.refetch()} /></Panel>
+      ) : kpis.isPending || !kpis.data ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32" />)}
         </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Paid revenue" value={formatCurrency(kpis.data.revenueMinor / 100)} hint={`${kpis.data.revenueDeltaPct >= 0 ? "+" : ""}${kpis.data.revenueDeltaPct}% month over month`} icon={DollarSign} tone="ok" />
+          <StatCard label="Enrollments" value={formatNumber(kpis.data.activeLearners)} hint="Across every agency" icon={GraduationCap} tone="brand" />
+          <StatCard label="Completion rate" value={`${kpis.data.completionRate}%`} hint={`${kpis.data.passRate}% assessment pass rate`} icon={TrendingUp} tone="info" />
+          <StatCard label="Agencies" value={formatNumber(kpis.data.agencies)} hint="Active tenants on the platform" icon={Building2} tone="navy" />
+        </div>
+      )}
 
-        {/* CHARTS ROW: Revenue Overview (Left 8 Cols) & Top Agencies (Right 4 Cols) */}
-        <div className="grid lg:grid-cols-12 gap-8 items-start">
-          {/* Revenue Overview (Screen 7 Reference) */}
-          <div className="lg:col-span-8 bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-base font-black text-gray-900">Revenue Overview</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Stripe Card & PO Invoicing trends (Jan – Dec)</p>
-              </div>
-              <span className="text-xs font-bold text-secondary-600 bg-secondary-50 px-2.5 py-1 rounded-lg">
-                FY 2026
-              </span>
-            </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-12">
+        <Panel className="xl:col-span-8">
+          <PanelHeader
+            title="Revenue"
+            description="Paid orders over the last twelve months."
+            action={<Badge tone="brand">USD</Badge>}
+          />
+          {kpis.isPending ? <Skeleton className="h-56 w-full" /> : <AreaChart data={series} ariaLabel="Monthly paid revenue" format={(n) => formatCurrency(n)} />}
+        </Panel>
 
-            <div className="h-64 sm:h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
-                  <defs>
-                    <linearGradient id="revenueGreen" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2A5025" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#2A5025" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 11, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `$${v / 1000}k`}
-                  />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
-                    formatter={(v: number) => [formatCurrency(v), "Revenue"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#2A5025"
-                    strokeWidth={3}
-                    fill="url(#revenueGreen)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Top Agencies Breakdown (Screen 7 Reference: Texas DOT 342, Caltrans 298, FDOT 187...) */}
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base font-black text-gray-900">Top Agencies</h2>
-              <span className="text-xs text-gray-400 font-medium">Enrolled</span>
-            </div>
-
-            <div className="space-y-3.5">
-              {topAgenciesData.map((agency) => (
-                <div key={agency.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: agency.fill }}
-                    />
-                    <span className="font-bold text-gray-800">{agency.name}</span>
+        <Panel className="xl:col-span-4">
+          <PanelHeader title="Top agencies" description="By active members." action={<Link href="/admin/agencies" className="text-sm font-semibold text-brand-700 hover:text-brand-800">View all</Link>} />
+          {agencies.isPending ? (
+            <div className="space-y-3">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div>
+          ) : agencies.isError ? (
+            <ErrorState message={agencies.error instanceof Error ? agencies.error.message : undefined} onRetry={() => void agencies.refetch()} />
+          ) : topAgencies.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-600">No agencies yet.</p>
+          ) : (
+            <ol className="space-y-3">
+              {topAgencies.map((agency, index) => (
+                <li key={agency.publicId} className="flex items-center gap-3">
+                  <span className="tnum grid size-7 shrink-0 place-items-center rounded-lg bg-navy-900/[0.06] text-xs font-bold text-navy-800">{index + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink-900">{agency.displayName}</p>
+                    <p className="truncate text-xs text-ink-600">{agency.status}</p>
                   </div>
-                  <span className="font-black text-gray-900 text-sm">{agency.learners}</span>
-                </div>
+                  <span className="tnum text-sm font-bold text-ink-900">{formatNumber(agency.memberCount)}</span>
+                </li>
               ))}
-            </div>
-
-            <div className="pt-4 border-t border-gray-100">
-              <Link
-                href="/admin/agencies"
-                className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-primary-700 hover:text-primary-900 bg-primary-50 rounded-xl transition-colors"
-              >
-                <span>View All 12 Government Agencies</span>
-                <ExternalLink size={13} />
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* AGENCY ROSTER TABLE */}
-        <div className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h3 className="text-base font-black text-gray-900">Active Agency Subscriptions</h3>
-              <p className="text-xs text-gray-500">Tenant-isolated instances with strict agencyId scoping</p>
-            </div>
-            <button
-              onClick={() => alert("Exporting all agency reports...")}
-              className="inline-flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50"
-            >
-              <Download size={14} /> Export CSV Ledger
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
-                  <th className="pb-3">Agency Name</th>
-                  <th className="pb-3">Learners Enrolled</th>
-                  <th className="pb-3">Licensed Seats</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3">Onboarded</th>
-                  <th className="pb-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                {agencies.map((agency) => (
-                  <tr key={agency.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3.5 font-bold text-gray-900">{agency.name}</td>
-                    <td className="py-3.5">{agency.learners}</td>
-                    <td className="py-3.5">{agency.seats}</td>
-                    <td className="py-3.5">
-                      <span className="inline-flex items-center gap-1 bg-emerald-50 text-highlight-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                        <CheckCircle size={10} /> {agency.status}
-                      </span>
-                    </td>
-                    <td className="py-3.5 text-gray-400">{agency.joined}</td>
-                    <td className="py-3.5 text-right">
-                      <button
-                        onClick={() => alert(`Managing agency: ${agency.name}`)}
-                        className="text-primary-700 hover:text-primary-900 font-bold hover:underline"
-                      >
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            </ol>
+          )}
+        </Panel>
       </div>
-    </DashboardShell>
+
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Recent orders"
+          description="Latest purchases across agencies."
+          action={<Link href="/admin/orders" className="text-sm font-semibold text-brand-700 hover:text-brand-800">All orders</Link>}
+        />
+        <DataTable
+          caption="Recent platform orders"
+          columns={orderColumns}
+          rows={orders.data?.items}
+          rowKey={(o) => o.publicId}
+          loading={orders.isPending}
+          error={orders.isError ? (orders.error instanceof Error ? orders.error.message : "Could not load orders.") : undefined}
+          onRetry={() => void orders.refetch()}
+          empty={{ title: "No orders yet", description: "Seat purchases will appear here." }}
+        />
+      </Panel>
+
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Agency subscriptions"
+          description="Tenant-isolated agencies with their current seat usage."
+          action={<ButtonLink href="/admin/agencies" variant="secondary" size="sm">Manage agencies</ButtonLink>}
+        />
+        <DataTable
+          caption="Recent agencies"
+          columns={agencyColumns}
+          rows={agencies.data?.items}
+          rowKey={(a) => a.publicId}
+          loading={agencies.isPending}
+          error={agencies.isError ? (agencies.error instanceof Error ? agencies.error.message : "Could not load agencies.") : undefined}
+          onRetry={() => void agencies.refetch()}
+          empty={{ title: "No agencies yet" }}
+        />
+      </Panel>
+    </>
   );
 }

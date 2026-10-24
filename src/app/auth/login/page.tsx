@@ -1,45 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import Link from "next/link";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
-import Logo from "@/components/shared/Logo";
+import { ArrowRight, Loader2, Mail } from "lucide-react";
+
+import AuthLayout, { AuthHeading } from "@/components/auth/AuthLayout";
+import { FormAlert, PasswordField, TextField } from "@/components/auth/fields";
 import { mockLogin } from "@/lib/mock-auth";
-import { getRoleDashboard } from "@/lib/utils";
+import { cn, getRoleDashboard } from "@/lib/utils";
 
 type RoleTab = "learner" | "agency_admin" | "training_manager";
 
+const ROLES: { id: RoleTab; label: string; demo: { email: string; password: string } }[] = [
+  { id: "learner", label: "Learner", demo: { email: "learner@agency.gov", password: "learner123" } },
+  { id: "agency_admin", label: "Agency admin", demo: { email: "agency@agency.gov", password: "agency123" } },
+  { id: "training_manager", label: "Super admin", demo: { email: "admin@cpmi.gov", password: "admin123" } },
+];
+
 export default function LoginPage() {
   const router = useRouter();
+  const emailRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<RoleTab>("learner");
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("learner@agency.gov");
-  const [password, setPassword] = useState("learner123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleTabChange = (tab: RoleTab) => {
-    setActiveTab(tab);
-    setError("");
-    if (tab === "learner") {
-      setEmail("learner@agency.gov");
-      setPassword("learner123");
-    } else if (tab === "agency_admin") {
-      setEmail("agency@agency.gov");
-      setPassword("agency123");
-    } else if (tab === "training_manager") {
-      setEmail("admin@cpmi.gov");
-      setPassword("admin123");
-    }
-  };
-
-  const handleSelectDemo = (selectedEmail: string, selectedPass: string, tab: RoleTab) => {
-    setActiveTab(tab);
-    setEmail(selectedEmail);
-    setPassword(selectedPass);
+  const fillDemo = (role: (typeof ROLES)[number]) => {
+    setActiveTab(role.id);
+    setEmail(role.demo.email);
+    setPassword(role.demo.password);
     setError("");
   };
 
@@ -48,273 +40,115 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    // Mock authentication with realistic delay
+    // Mock authentication with a realistic delay.
     setTimeout(() => {
-      const user = mockLogin(email, password);
+      const user = mockLogin(email.trim(), password);
       if (user) {
-        const dashboard = getRoleDashboard(user.role);
-        router.push(dashboard);
+        router.push(getRoleDashboard(user.role));
       } else {
-        setError("Invalid email or password. Please select a valid demo role or check your input.");
+        setError("The email or password is incorrect. Check your details and try again.");
         setLoading(false);
+        emailRef.current?.focus();
       }
     }, 600);
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left – Decorative Government Visual (Screen 2 Reference) */}
-      <div
-        className="hidden lg:flex flex-1 relative overflow-hidden"
-        style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1600&q=80')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-950/95 via-primary-900/90 to-primary-900/75" />
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full text-white">
-          <Link href="/" className="inline-block">
-            <Logo variant="light" size="md" />
-          </Link>
+    <AuthLayout>
+      <AuthHeading title="Welcome back">Sign in with the email address your agency registered for you.</AuthHeading>
 
-          <div>
-            <motion.h2
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="text-4xl sm:text-5xl font-black text-white leading-tight tracking-tight"
-            >
-              Compliance.
-              <br />
-              Training.
-              <br />
-              <span className="text-secondary-400">Impact.</span>
-            </motion.h2>
-
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-              className="mt-5 text-white/80 max-w-sm text-sm sm:text-base leading-relaxed"
-            >
-              Sign in to your account to continue your learning journey and access verified compliance training credentials.
-            </motion.p>
-
-            <div className="mt-8 flex items-center gap-3 text-xs text-white/70">
-              <span className="w-2 h-2 rounded-full bg-highlight-500 animate-pulse" />
-              <span>Accreditation Ready • WCAG 2.1 AA / Section 508 Compliant</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-white/40 text-xs">
-            <p>© 2026 Certification Professionals Mastery Institute</p>
-            <Link href="/" className="hover:text-white transition-colors">
-              Return to Homepage
-            </Link>
-          </div>
+      {error ? (
+        <div className="mt-6">
+          <FormAlert id="login-error">{error}</FormAlert>
         </div>
-      </div>
+      ) : null}
 
-      {/* Right – Form & Role Tabs (Screen 2 Reference) */}
-      <div className="flex-1 lg:max-w-xl flex items-center justify-center p-6 sm:p-10 bg-white">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <div className="lg:hidden mb-6">
-            <Link href="/">
-              <Logo size="md" />
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <TextField
+          ref={emailRef}
+          label="Email address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="name@agency.gov"
+          required
+          autoComplete="username"
+          icon={<Mail size={16} />}
+          invalid={!!error}
+        />
+
+        <PasswordField
+          label="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+          invalid={!!error}
+          labelAside={
+            <Link href="/auth/forgot-password" className="rounded text-sm font-medium text-primary-500 hover:text-primary-700 hover:underline">
+              Forgot password?
             </Link>
-          </div>
+          }
+        />
 
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl font-black text-primary-950">Welcome Back</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              Sign in to your account to continue your learning journey.
-            </p>
-          </div>
+        <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-ink-700">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="size-4 rounded border-line accent-primary-500"
+          />
+          Keep me signed in on this device
+        </label>
 
-          {/* Role Tabs (Screen 2 Direct Reference) */}
-          <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-xl mb-6 text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => handleTabChange("learner")}
-              className={`py-2 px-3 rounded-lg transition-all text-center focus:outline-none ${
-                activeTab === "learner"
-                  ? "bg-white text-primary-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Learner
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("agency_admin")}
-              className={`py-2 px-3 rounded-lg transition-all text-center focus:outline-none ${
-                activeTab === "agency_admin"
-                  ? "bg-white text-primary-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Agency Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("training_manager")}
-              className={`py-2 px-3 rounded-lg transition-all text-center focus:outline-none ${
-                activeTab === "training_manager"
-                  ? "bg-white text-primary-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Super Admin
-            </button>
-          </div>
-
-          {/* Demo Accounts Callout (Kept prominently with passwords shown) */}
-          <div className="mb-6 p-4 bg-blue-50/80 border border-blue-200 rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                <CheckCircle2 size={13} className="text-blue-600" />
-                Demo Credentials (Click to Autofill):
-              </p>
-              <span className="text-[10px] text-blue-500 font-semibold uppercase tracking-wider">Fast Access</span>
-            </div>
-            <div className="text-xs text-blue-800 space-y-1.5">
-              <button
-                type="button"
-                onClick={() => handleSelectDemo("learner@agency.gov", "learner123", "learner")}
-                className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                  activeTab === "learner" ? "bg-blue-100/90 font-bold" : "hover:bg-blue-100/50"
-                }`}
-              >
-                <span><strong>Learner:</strong> learner@agency.gov / learner123</span>
-                {activeTab === "learner" && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full">Active</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectDemo("agency@agency.gov", "agency123", "agency_admin")}
-                className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                  activeTab === "agency_admin" ? "bg-blue-100/90 font-bold" : "hover:bg-blue-100/50"
-                }`}
-              >
-                <span><strong>Agency Admin:</strong> agency@agency.gov / agency123</span>
-                {activeTab === "agency_admin" && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full">Active</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectDemo("admin@cpmi.gov", "admin123", "training_manager")}
-                className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                  activeTab === "training_manager" ? "bg-blue-100/90 font-bold" : "hover:bg-blue-100/50"
-                }`}
-              >
-                <span><strong>Super Admin:</strong> admin@cpmi.gov / admin123</span>
-                {activeTab === "training_manager" && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full">Active</span>}
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs sm:text-sm">
-              <AlertCircle size={16} className="flex-shrink-0" />
-              <span>{error}</span>
-            </div>
+        <button type="submit" disabled={loading} className="btn-forest h-12 w-full text-base">
+          {loading ? (
+            <>
+              <Loader2 size={17} className="animate-spin" aria-hidden /> Signing in
+            </>
+          ) : (
+            <>
+              Sign in <ArrowRight size={17} aria-hidden />
+            </>
           )}
+        </button>
+      </form>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="label">
-                Email address
-              </label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="input pl-10 text-sm"
-                  autoComplete="email"
-                />
-              </div>
-            </div>
+      <p className="mt-8 border-t border-line-soft pt-6 text-sm leading-relaxed text-ink-500">
+        Accounts are created by invitation. No account yet? Ask your agency administrator.{" "}
+        <Link href="/invitations/accept" className="font-semibold text-primary-500 hover:underline">
+          Have an invitation?
+        </Link>
+      </p>
 
-            <div>
-              <label htmlFor="password" className="label">
-                Password
-              </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="input pl-10 pr-10 text-sm"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 text-gray-600 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="rounded border-gray-300 accent-primary-500 focus:ring-2 focus:ring-primary-500 focus:ring-offset-1"
-                />
-                Remember me
-              </label>
-              <Link
-                href="/auth/forgot-password"
-                className="text-primary-600 hover:text-primary-800 font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 rounded"
+      {/* Prototype helper: fills the form for each role. Remove when the live API is connected. */}
+      <section aria-labelledby="demo-title" className="mt-8 rounded-md border border-dashed border-line bg-paper p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="demo-title" className="text-[0.75rem] font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Prototype demo accounts
+          </h2>
+          <span className="text-xs text-ink-400">Not real credentials</span>
+        </div>
+        <div role="group" aria-label="Fill the form for a role" className="mt-3 grid grid-cols-3 gap-2">
+          {ROLES.map((role) => {
+            const isActive = activeTab === role.id && email === role.demo.email;
+            return (
+              <button
+                key={role.id}
+                type="button"
+                onClick={() => fillDemo(role)}
+                aria-pressed={isActive}
+                className={cn(
+                  "rounded-md border px-2 py-2.5 text-[0.8125rem] font-medium leading-tight transition-colors",
+                  isActive ? "border-primary-500 bg-primary-50 text-primary-700" : "border-line bg-white text-ink-700 hover:border-ink-400"
+                )}
               >
-                Forgot password?
-              </Link>
-            </div>
-
-            <motion.button
-              whileHover={{ scale: loading ? 1 : 1.01 }}
-              whileTap={{ scale: loading ? 1 : 0.99 }}
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 text-sm mt-2"
-            >
-              {loading ? "Signing in to CPMI..." : "Sign In"} {!loading && <ArrowRight size={16} />}
-            </motion.button>
-          </form>
-
-          {/* Subtext matching Screen 2 Reference */}
-          <div className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
-            <p>
-              Don&apos;t have an account?{" "}
-              <span className="font-semibold text-gray-700">Contact your agency administrator.</span>
-            </p>
-            <p className="mt-2">
-              Have an invitation code?{" "}
-              <Link href="/auth/invitation" className="text-primary-600 font-bold hover:underline">
-                Accept Agency Invitation
-              </Link>
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    </div>
+                {role.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </AuthLayout>
   );
 }

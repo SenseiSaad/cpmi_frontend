@@ -1,139 +1,103 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, DollarSign, Video, Mail, Shield, Check, Save } from "lucide-react";
-import DashboardShell from "@/components/layout/DashboardShell";
-import { AdminSidebar } from "@/components/layout/SidebarNav";
+import { Database, Globe2, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { env } from "@/config/env";
+import { useHealth } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import { formatNumber } from "@/lib/utils";
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-3 text-sm last:border-0">
+      <span className="text-ink-600">{label}</span>
+      <span className="font-semibold text-ink-900">{value}</span>
+    </div>
+  );
+}
 
 export default function AdminSettingsPage() {
-  const [annualSeatPrice, setAnnualSeatPrice] = useState("1495");
-  const [modulePrice, setModulePrice] = useState("175");
-  const [stripeConnected, setStripeConnected] = useState(true);
-  const [vimeoConfigured, setVimeoConfigured] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const { user, signOut } = useSession();
+  const health = useHealth();
+  const router = useRouter();
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
-    <DashboardShell
-      sidebar={<AdminSidebar />}
-      headerContent={
-        <div>
-          <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight">
-            Platform Configuration & Integrations
-          </h1>
-          <p className="text-xs text-gray-500">
-            Configure pricing, Stripe Invoicing, Vimeo OTT streaming, and email notifications
-          </p>
-        </div>
-      }
-    >
-      <div className="max-w-4xl space-y-6">
-        {/* Pricing Configuration */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs">
-          <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">
-            Curriculum & Seat Pricing (Stripe Billing)
-          </h2>
+    <>
+      <PageHeader
+        eyebrow="Platform"
+        title="Settings"
+        subtitle="Your account, environment and service health. Platform policy is configured on the backend."
+        actions={<Button variant="secondary" icon={<LogOut className="size-4" aria-hidden />} onClick={() => void handleSignOut()}>Sign out</Button>}
+      />
 
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">
-                  Full 11-Module Annual License ($/seat/year)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                  <input
-                    type="number"
-                    value={annualSeatPrice}
-                    onChange={(e) => setAnnualSeatPrice(e.target.value)}
-                    className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-              </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Account" description="Signed-in platform operator." />
+          <Row label="Name" value={<span className="inline-flex items-center gap-2"><UserRound className="size-4 text-ink-500" aria-hidden />{user ? `${user.firstName} ${user.lastName}` : "—"}</span>} />
+          <Row label="Email" value={user?.email ?? "—"} />
+          <Row label="Role" value={<Badge tone="navy">{user?.role.replace(/_/g, " ") ?? "—"}</Badge>} />
+          <Row label="User ID" value={<span className="font-mono text-xs">{user?.userPublicId ?? "—"}</span>} />
+        </Panel>
 
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">
-                  Single Module / Monthly Enrolled Price ($/module)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                  <input
-                    type="number"
-                    value={modulePrice}
-                    onChange={(e) => setModulePrice(e.target.value)}
-                    className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-400">
-                Updates will take effect immediately across Stripe Checkout and Stripe Invoicing.
-              </span>
-              <button
-                type="submit"
-                className="bg-[#152A13] hover:bg-primary-800 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition-colors shadow-xs"
-              >
-                {saved ? "Saved ✓" : "Update Pricing"}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Integration Services (From Developer Spec Section 2) */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs space-y-4">
-          <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-2">
-            Third-Party Infrastructure Services
-          </h2>
-
-          <div className="space-y-3">
-            {[
-              {
-                service: "Stripe Billing & Invoicing",
-                desc: "Handles card payments and purchase order invoice flow for government buyers.",
-                status: "Connected & Active",
-                icon: DollarSign,
-              },
-              {
-                service: "Vimeo OTT Video Streaming",
-                desc: "High-definition video hosting with verified server-side watch tracking.",
-                status: "API Connected",
-                icon: Video,
-              },
-              {
-                service: "Transactional Email (Postmark/SendGrid)",
-                desc: "Automated student onboarding invites, completion notifications, and renewal alerts.",
-                status: "Operational",
-                icon: Mail,
-              },
-            ].map((item) => (
-              <div
-                key={item.service}
-                className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-primary-900">
-                    <item.icon size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-gray-900">{item.service}</h3>
-                    <p className="text-[11px] text-gray-500">{item.desc}</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold text-highlight-600 bg-emerald-50 px-2.5 py-1 rounded-full whitespace-nowrap">
-                  {item.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <Panel>
+          <PanelHeader title="Environment" description="Build-time configuration of this deployment." />
+          <Row label="API mode" value={<Badge tone={env.apiMode === "live" ? "ok" : "warn"} dot>{env.apiMode}</Badge>} />
+          <Row label="API base" value={<span className="inline-flex items-center gap-1.5 font-mono text-xs"><Globe2 className="size-3.5 text-ink-500" aria-hidden />{env.apiBaseUrl || "same-origin proxy"}</span>} />
+          <Row label="Environment" value={env.environment} />
+          <Row
+            label="Database"
+            value={
+              health.data ? (
+                <Badge tone="ok" dot>Reachable</Badge>
+              ) : health.isError ? (
+                <Badge tone="bad" dot>Unavailable</Badge>
+              ) : (
+                <Badge tone="neutral">Checking…</Badge>
+              )
+            }
+          />
+        </Panel>
       </div>
-    </DashboardShell>
+
+      <Panel className="mt-6">
+        <PanelHeader title="Service health" description="Live queue snapshot from the backend observability endpoint." action={<ShieldCheck className="size-5 text-ok" aria-hidden />} />
+        {health.data ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Audit queue</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.auditQueue.pending)}</p>
+              <p className="text-xs text-ink-600">pending</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Webhooks</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.webhooks.failed)}</p>
+              <p className="text-xs text-ink-600">failed</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-600">Notifications</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.email.pending)}</p>
+              <p className="text-xs text-ink-600">queued</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-600"><Database className="size-3.5" aria-hidden /> Workers</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{health.data.workers.filter((w) => w.ok).length}/{health.data.workers.length}</p>
+              <p className="text-xs text-ink-600">healthy</p>
+            </div>
+          </div>
+        ) : (
+          <p className="py-6 text-sm text-ink-600">{health.isError ? "Could not reach the health endpoint." : "Loading…"}</p>
+        )}
+      </Panel>
+    </>
   );
 }

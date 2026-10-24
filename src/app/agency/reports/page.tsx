@@ -1,131 +1,124 @@
 "use client";
 
-import { useState } from "react";
-import { BarChart3, Download, FileSpreadsheet, CheckCircle, Clock, ShieldCheck } from "lucide-react";
-import DashboardShell from "@/components/layout/DashboardShell";
-import { AgencySidebar } from "@/components/layout/SidebarNav";
-import { agencyMembers } from "@/lib/data";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { ProgressBar } from "@/components/ui/progress";
+import { StatCard } from "@/components/ui/stat-card";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { useAgencyLearnerReport, useAgencyReport } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import type { AgencyLearnerReport } from "@/lib/api/hooks";
+import { formatNumber, relativeDays } from "@/lib/utils";
+
+const columns: Column<AgencyLearnerReport>[] = [
+  {
+    key: "learner",
+    header: "Learner",
+    width: "minmax(0,1.8fr)",
+    cell: (row) => (
+      <div className="min-w-0">
+        <p className="truncate font-semibold text-ink-900">{row.learnerName}</p>
+        <p className="truncate font-mono text-xs text-ink-600">{row.email}</p>
+      </div>
+    ),
+  },
+  { key: "course", header: "Course", width: "minmax(0,1.5fr)", cell: (row) => <span className="truncate text-ink-700">{row.courseTitle}</span> },
+  {
+    key: "progress",
+    header: "Progress",
+    width: "minmax(0,1.4fr)",
+    cell: (row) => (
+      <div>
+        <ProgressBar value={row.progressPercent} label={`${row.learnerName} progress`} showValue />
+        <p className="mt-1 text-xs capitalize text-ink-600">{row.enrollmentStatus.replace(/_/g, " ")}</p>
+      </div>
+    ),
+  },
+  {
+    key: "assessments",
+    header: "Assessments",
+    width: "120px",
+    align: "right",
+    cell: (row) => <span className="tnum text-ink-700">{row.assessmentsPassed}/{row.assessmentsTotal} passed</span>,
+  },
+  {
+    key: "score",
+    header: "Best score",
+    width: "100px",
+    align: "right",
+    cell: (row) => <span className="tnum font-semibold">{row.bestScorePercent === null ? "—" : `${row.bestScorePercent}%`}</span>,
+  },
+  {
+    key: "assigned",
+    header: "Assigned",
+    width: "120px",
+    cell: (row) => <span className="text-ink-600">{row.assignedAt ? relativeDays(row.assignedAt) : "—"}</span>,
+  },
+];
 
 export default function AgencyReportsPage() {
-  const [exporting, setExporting] = useState(false);
-
-  const handleExportPdf = () => {
-    setExporting(true);
-    setTimeout(() => {
-      setExporting(false);
-      window.print();
-    }, 600);
-  };
+  const { user } = useSession();
+  const report = useAgencyReport(true);
+  const learners = useAgencyLearnerReport(true);
+  const agencyId = user?.agency?.publicId;
 
   return (
-    <DashboardShell
-      sidebar={<AgencySidebar />}
-      headerContent={
-        <div>
-          <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight">
-            Agency Compliance Reports
-          </h1>
-          <p className="text-xs text-gray-500">
-            Exportable team training transcripts and federal audit compliance packages
-          </p>
-        </div>
-      }
-    >
-      <div className="space-y-6">
-        {/* Export Action Card */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/90 shadow-xs">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-black text-gray-900">FHWA / FTA Triennial Audit Package</span>
-              <span className="text-[10px] bg-emerald-50 text-highlight-600 font-bold px-2 py-0.5 rounded-full">
-                Audit Ready
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Includes individual employee scores, module completion timestamps, and certificate verification hashes.
-            </p>
-          </div>
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Reports"
+        subtitle="Tenant-scoped completion and assessment reporting. Exports are generated server-side."
+        actions={
+          agencyId ? (
+            <>
+              <ButtonLink href={`/api/agencies/${agencyId}/reports/learners.csv`} variant="secondary" icon={<FileSpreadsheet className="size-4" aria-hidden />} prefetch={false}>
+                Export CSV
+              </ButtonLink>
+              <ButtonLink href={`/api/agencies/${agencyId}/reports/learners.pdf`} variant="primary" icon={<FileText className="size-4" aria-hidden />} prefetch={false}>
+                Export PDF
+              </ButtonLink>
+            </>
+          ) : null
+        }
+      />
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => alert("Downloading team roster CSV...")}
-              className="inline-flex items-center gap-2 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50"
-            >
-              <FileSpreadsheet size={14} className="text-emerald-600" />
-              <span>Export CSV</span>
-            </button>
-            <button
-              onClick={handleExportPdf}
-              className="inline-flex items-center gap-2 bg-[#152A13] hover:bg-primary-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-colors shadow-xs"
-            >
-              <Download size={14} className="text-secondary-400" />
-              <span>{exporting ? "Generating PDF..." : "Export Official PDF"}</span>
-            </button>
-          </div>
+      {report.isError ? (
+        <Panel><ErrorState message={report.error instanceof Error ? report.error.message : undefined} onRetry={() => void report.refetch()} /></Panel>
+      ) : report.isPending || !report.data ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32" />)}
         </div>
-
-        {/* Detailed Team Compliance Ledger Table */}
-        <div className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs">
-          <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">
-            Team Member Compliance Records
-          </h2>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
-                  <th className="pb-3 pl-2">Staff Member</th>
-                  <th className="pb-3">Email Address</th>
-                  <th className="pb-3">Completed Modules</th>
-                  <th className="pb-3">Overall Progress</th>
-                  <th className="pb-3">Exam Score</th>
-                  <th className="pb-3">Certificate ID</th>
-                  <th className="pb-3 text-right pr-2">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
-                {agencyMembers.map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="py-4 pl-2 font-bold text-gray-900">{m.name}</td>
-                    <td className="py-4 font-mono text-[11px] text-gray-500">{m.email}</td>
-                    <td className="py-4 font-semibold text-gray-800">
-                      {m.progress === 100 ? "11 of 11 Modules" : m.progress > 0 ? "4 of 11 Modules" : "0 of 11 Modules"}
-                    </td>
-                    <td className="py-4">
-                      <div className="flex items-center gap-2 w-32">
-                        <div className="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              m.progress === 100 ? "bg-highlight-500" : "bg-secondary-500"
-                            }`}
-                            style={{ width: `${m.progress}%` }}
-                          />
-                        </div>
-                        <span className="font-bold text-[11px]">{m.progress}%</span>
-                      </div>
-                    </td>
-                    <td className="py-4 font-bold text-gray-900">
-                      {m.progress === 100 ? "96%" : m.progress > 0 ? "88%" : "Pending"}
-                    </td>
-                    <td className="py-4 font-mono text-[11px] text-primary-900 font-bold">
-                      {m.progress === 100 ? "CPMI-2026-000089" : "In Progress"}
-                    </td>
-                    <td className="py-4 text-right pr-2">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          m.status === "Active" ? "bg-emerald-50 text-highlight-600" : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {m.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Active members" value={formatNumber(report.data.members.active)} icon={undefined} tone="brand" />
+          <StatCard label="Seats assigned" value={`${formatNumber(report.data.seats.assigned)} / ${formatNumber(report.data.seats.capacity)}`} tone="navy" />
+          <StatCard label="Completion" value={report.data.enrollments.completionPercent === null ? "—" : `${report.data.enrollments.completionPercent}%`} hint={`${formatNumber(report.data.enrollments.completed)} of ${formatNumber(report.data.enrollments.total)} enrollments`} tone="ok" />
+          <StatCard label="Pass rate" value={report.data.assessments.passRatePercent === null ? "—" : `${report.data.assessments.passRatePercent}%`} hint={`${formatNumber(report.data.assessments.graded)} graded attempts`} tone="info" />
         </div>
-      </div>
-    </DashboardShell>
+      )}
+
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Learner progress"
+          description="Per-enrollment progress, assessment results and certificate eligibility."
+          action={<Badge tone="navy"><Download className="size-3.5" aria-hidden /> Server-generated exports</Badge>}
+        />
+        <DataTable
+          caption="Learner progress report"
+          columns={columns}
+          rows={learners.data?.items}
+          rowKey={(row) => `${row.email}-${row.courseTitle}-${row.assignedAt}`}
+          loading={learners.isPending}
+          error={learners.isError ? (learners.error instanceof Error ? learners.error.message : "Could not load the learner report.") : undefined}
+          onRetry={() => void learners.refetch()}
+          empty={{ title: "No enrollments yet", description: "Assign a seat and enroll a learner to see progress here." }}
+        />
+      </Panel>
+    </>
   );
 }

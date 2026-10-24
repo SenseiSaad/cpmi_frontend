@@ -7,7 +7,8 @@ class APIClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+      // The backend listens on 4000 by default (see backend/README.md).
+      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
@@ -25,8 +26,11 @@ class APIClient {
       (response) => response,
       (error: AxiosError) => {
         if (error.response?.status === 401) {
-          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
-            window.location.href = '/auth/session-expired';
+          const publicPath =
+            typeof window !== 'undefined' &&
+            (window.location.pathname.startsWith('/auth') || window.location.pathname.startsWith('/invitations'));
+          if (typeof window !== 'undefined' && !publicPath) {
+            window.location.href = '/auth/login';
           }
         }
         return Promise.reject(this.normalizeError(error));
@@ -36,8 +40,9 @@ class APIClient {
 
   async fetchCSRF(): Promise<void> {
     try {
-      const response = await this.client.get<{ token: string }>('/api/auth/csrf');
-      this.csrfToken = response.data.token;
+      // The API answers { csrfToken } and also sets the matching cookie (double-submit).
+      const response = await this.client.get<{ csrfToken: string }>('/api/auth/csrf');
+      this.csrfToken = response.data.csrfToken;
     } catch (error) {
       console.error('Failed to fetch CSRF token:', error);
     }
@@ -45,11 +50,13 @@ class APIClient {
 
   private normalizeError(error: AxiosError): ApiError {
     if (error.response?.data && typeof error.response.data === 'object') {
+      // The API's error envelope is { error: { code, message, requestId, details? } }.
       const data = error.response.data as any;
+      const body = data.error && typeof data.error === 'object' ? data.error : data;
       return {
-        message: data.message || data.error || 'An unexpected error occurred',
-        code: data.code,
-        field: data.field,
+        message: body.message || 'An unexpected error occurred',
+        code: body.code,
+        field: body.field,
       };
     }
     return {

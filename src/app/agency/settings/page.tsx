@@ -1,146 +1,125 @@
 "use client";
 
+import { Building2, CreditCard, LogOut, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Settings, CreditCard, Shield, Plus, Download, CheckCircle, FileText, Building2 } from "lucide-react";
-import DashboardShell from "@/components/layout/DashboardShell";
-import { AgencySidebar } from "@/components/layout/SidebarNav";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { ProgressBar } from "@/components/ui/progress";
+import { api } from "@/lib/api";
+import { useEntitlements } from "@/lib/api/hooks";
+import { useSession } from "@/lib/auth/session";
+import { formatNumber } from "@/lib/utils";
 
 export default function AgencySettingsPage() {
-  const [totalSeats, setTotalSeats] = useState(12);
-  const [agencyName, setAgencyName] = useState("Texas Department of Transportation (TxDOT)");
-  const [poNumber, setPoNumber] = useState("TXDOT-PO-2026-8841");
-  const [billingContact, setBillingContact] = useState("procurement@txdot.gov");
-  const [saved, setSaved] = useState(false);
+  const { user, signOut } = useSession();
+  const entitlements = useEntitlements();
+  const router = useRouter();
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalBusy, setPortalBusy] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+  async function openBillingPortal() {
+    setPortalBusy(true);
+    setPortalError(null);
+    try {
+      const { url } = await api.store.billingPortal();
+      if (url) window.location.assign(url);
+      else setPortalError("Stripe did not return a billing portal link.");
+    } catch (error) {
+      setPortalError(error instanceof Error ? error.message : "Could not open the billing portal.");
+    } finally {
+      setPortalBusy(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
-    <DashboardShell
-      sidebar={<AgencySidebar />}
-      headerContent={
-        <div>
-          <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight">
-            Agency Seats & Invoicing
-          </h1>
-          <p className="text-xs text-gray-500">
-            Manage licensed employee seats, Stripe Billing, and Purchase Order (PO) invoicing
+    <>
+      <PageHeader
+        eyebrow="Agency"
+        title="Settings"
+        subtitle="Agency identity, seat entitlements and billing."
+        actions={<Button variant="secondary" icon={<LogOut className="size-4" aria-hidden />} onClick={() => void handleSignOut()}>Sign out</Button>}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Agency" description="Tenant identity and your membership." action={<Building2 className="size-5 text-ink-500" aria-hidden />} />
+          <dl className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <dt className="text-ink-600">Name</dt>
+              <dd className="text-right font-semibold text-ink-900">{user?.agency?.displayName ?? "—"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <dt className="text-ink-600">Slug</dt>
+              <dd className="font-mono text-xs text-ink-900">{user?.agency?.slug ?? "—"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <dt className="text-ink-600">Your role</dt>
+              <dd><Badge tone="navy">{user?.role.replace(/_/g, " ") ?? "—"}</Badge></dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="flex items-center gap-1.5 text-ink-600"><UserRound className="size-4" aria-hidden /> Signed in as</dt>
+              <dd className="text-right">
+                <p className="font-semibold text-ink-900">{user ? `${user.firstName} ${user.lastName}` : "—"}</p>
+                <p className="font-mono text-xs text-ink-600">{user?.email ?? "—"}</p>
+              </dd>
+            </div>
+          </dl>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Billing" description="Card payments and purchase-order invoicing are handled by Stripe." action={<CreditCard className="size-5 text-ink-500" aria-hidden />} />
+          <p className="text-sm text-ink-600">
+            Open the Stripe billing portal to update the payment method, download invoices or manage the subscription.
           </p>
-        </div>
-      }
-    >
-      <div className="max-w-4xl space-y-6">
-        {/* Seat Licensing Overview */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <span className="text-xs font-bold text-secondary-600 uppercase tracking-wider bg-secondary-50 px-2.5 py-0.5 rounded-full border border-secondary-200">
-                Seat Pool License
-              </span>
-              <h2 className="text-xl font-black text-gray-900 mt-2">
-                Licensed Seat Allocation
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Seats can be freely reassigned to new agency personnel when staff turn over.
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                setTotalSeats((prev) => prev + 5);
-                alert("Added 5 additional seats via Stripe PO Invoice.");
-              }}
-              className="inline-flex items-center gap-1.5 bg-[#152A13] hover:bg-primary-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-colors shadow-xs"
-            >
-              <Plus size={14} className="text-secondary-400" />
-              <span>Purchase Additional Seats</span>
-            </button>
+          {portalError ? <p role="alert" className="mt-3 rounded-xl bg-bad-bg p-3 text-sm text-bad">{portalError}</p> : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button loading={portalBusy} onClick={() => void openBillingPortal()}>Open billing portal</Button>
+            <ButtonLink href="/agency/orders" variant="secondary">Order history</ButtonLink>
           </div>
-
-          <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 text-center">
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase">Total Licensed</span>
-              <p className="text-3xl font-black text-primary-950 mt-0.5">{totalSeats}</p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase">Assigned Staff</span>
-              <p className="text-3xl font-black text-gray-900 mt-0.5">5</p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase">Available Slots</span>
-              <p className="text-3xl font-black text-highlight-600 mt-0.5">{totalSeats - 5}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* PO-Based Stripe Invoicing Information */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs">
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">
-            Government Purchase Order & Billing
-          </h3>
-
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Agency Name</label>
-                <input
-                  type="text"
-                  value={agencyName}
-                  onChange={(e) => setAgencyName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Active PO Number</label>
-                <input
-                  type="text"
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500 font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Procurement Email</label>
-                <input
-                  type="email"
-                  value={billingContact}
-                  onChange={(e) => setBillingContact(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Payment Method</label>
-                <div className="px-3.5 py-2.5 border border-gray-200 bg-gray-50 rounded-xl text-xs font-bold text-gray-700 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <FileText size={14} className="text-secondary-600" /> Stripe PO Invoicing (Net 30)
-                  </span>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">Active</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 flex items-center justify-between border-t border-gray-100">
-              <span className="text-xs text-gray-400">
-                Invoices and receipts are automatically synced with your Stripe account.
-              </span>
-              <button
-                type="submit"
-                className="bg-[#152A13] hover:bg-primary-800 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition-colors shadow-xs"
-              >
-                {saved ? "Saved ✓" : "Save Settings"}
-              </button>
-            </div>
-          </form>
-        </div>
+        </Panel>
       </div>
-    </DashboardShell>
+
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Seat entitlements"
+          description="Active and historical seat pools for this agency."
+          action={<ButtonLink href="/agency/seats" variant="secondary" size="sm">Manage seats</ButtonLink>}
+        />
+        {entitlements.isPending ? (
+          <p className="py-4 text-sm text-ink-600">Loading entitlements…</p>
+        ) : entitlements.isError ? (
+          <p className="py-4 text-sm text-bad">Could not load entitlements.</p>
+        ) : (entitlements.data?.length ?? 0) === 0 ? (
+          <p className="py-4 text-sm text-ink-600">No entitlements yet. Buy seats from the store to create one.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {entitlements.data?.map((ent) => (
+              <li key={ent.id} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_auto] sm:items-center">
+                <div>
+                  <p className="font-semibold text-ink-900">{ent.productName}</p>
+                  <p className="text-xs text-ink-600">
+                    {new Date(ent.validFrom).toLocaleDateString()} – {new Date(ent.validUntil).toLocaleDateString()}
+                  </p>
+                </div>
+                <ProgressBar value={ent.seatCapacity > 0 ? (ent.seatsUsed / ent.seatCapacity) * 100 : 0} label={`${ent.productName} seats`} showValue />
+                <div className="flex items-center gap-3 sm:justify-end">
+                  <span className="tnum text-sm text-ink-600">{formatNumber(ent.seatsUsed)} / {formatNumber(ent.seatCapacity)}</span>
+                  <StatusPill status={ent.status} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </>
   );
 }

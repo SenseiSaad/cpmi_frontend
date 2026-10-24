@@ -1,81 +1,131 @@
 "use client";
 
-import { BarChart3, Download, TrendingUp, CheckCircle, Award, Shield, FileText } from "lucide-react";
-import DashboardShell from "@/components/layout/DashboardShell";
-import { AdminSidebar } from "@/components/layout/SidebarNav";
-import { modules, adminStats } from "@/lib/data";
+import { Activity, Award, CheckCircle2, ServerCog, TrendingUp } from "lucide-react";
+
+import { BarChart, Donut } from "@/components/charts/charts";
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Panel, PanelHeader } from "@/components/ui/panel";
+import { StatCard } from "@/components/ui/stat-card";
+import { ErrorState, Skeleton } from "@/components/ui/states";
+import { useHealth, useKpis } from "@/lib/api/hooks";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 
 export default function AdminReportsPage() {
+  const kpis = useKpis();
+  const health = useHealth();
+
   return (
-    <DashboardShell
-      sidebar={<AdminSidebar />}
-      headerContent={
-        <div>
-          <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight">
-            Accreditation & Analytics Reports
-          </h1>
-          <p className="text-xs text-gray-500">
-            Module completion rates, exam pass/fail curves, and audit trails for Q2 2027 Accreditation
-          </p>
+    <>
+      <PageHeader
+        eyebrow="Platform"
+        title="Reports & observability"
+        subtitle="Completion, assessment outcomes and the health of background processing."
+      />
+
+      {kpis.isError ? (
+        <Panel><ErrorState message={kpis.error instanceof Error ? kpis.error.message : undefined} onRetry={() => void kpis.refetch()} /></Panel>
+      ) : kpis.isPending || !kpis.data ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32" />)}
         </div>
-      }
-    >
-      <div className="space-y-6">
-        {/* Header Action Bar */}
-        <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200/90 shadow-xs">
-          <div>
-            <span className="text-xs font-black text-gray-900">FHWA / FTA Compliance Audit Package</span>
-            <p className="text-[11px] text-gray-500">Includes immutable verification hashes and timestamp logs</p>
-          </div>
-          <button
-            onClick={() => alert("Generating Official Federal Accreditation Audit PDF...")}
-            className="inline-flex items-center gap-2 bg-[#152A13] hover:bg-primary-800 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors shadow-xs"
-          >
-            <Download size={14} className="text-secondary-400" />
-            <span>Generate Official Audit Report (PDF)</span>
-          </button>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Paid revenue" value={formatCurrency(kpis.data.revenueMinor / 100)} icon={TrendingUp} tone="ok" />
+          <StatCard label="Enrollments" value={formatNumber(kpis.data.activeLearners)} icon={Activity} tone="brand" />
+          <StatCard label="Completion" value={`${kpis.data.completionRate}%`} icon={CheckCircle2} tone="info" />
+          <StatCard label="Certificates" value={formatNumber(kpis.data.passFail.pass)} hint="Passing assessments" icon={Award} tone="navy" />
         </div>
+      )}
 
-        {/* Module Completion Rates Breakdown */}
-        <div className="bg-white rounded-2xl border border-gray-200/90 p-6 shadow-xs">
-          <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">
-            Module-Level Completion & Pass Distribution
-          </h2>
+      <div className="mt-6 grid gap-6 lg:grid-cols-12">
+        <Panel className="lg:col-span-8">
+          <PanelHeader title="Completion by course" description="Percentage of enrollments completed in each course." />
+          {kpis.isPending ? (
+            <Skeleton className="h-52 w-full" />
+          ) : kpis.data && kpis.data.moduleCompletion.length > 0 ? (
+            <BarChart
+              ariaLabel="Course completion percentages"
+              data={kpis.data.moduleCompletion.slice(0, 12).map((c) => ({ label: c.label.length > 10 ? `${c.label.slice(0, 10)}…` : c.label, value: c.value }))}
+            />
+          ) : (
+            <p className="py-16 text-center text-sm text-ink-600">No enrollments recorded yet.</p>
+          )}
+        </Panel>
 
-          <div className="space-y-3.5">
-            {modules.map((m) => {
-              const passRate = 85 + (m.id % 12);
-              return (
-                <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3 sm:w-72">
-                    <span className="w-8 h-8 rounded-lg bg-primary-900 text-secondary-400 font-black text-xs flex items-center justify-center flex-shrink-0">
-                      {m.code}
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 truncate">{m.title}</p>
-                      <p className="text-[10px] text-gray-400">{m.regulatoryRef}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 max-w-md mx-4">
-                    <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
-                      <span>Pass Rate: {passRate}%</span>
-                      <span>Target: &gt;80%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                      <div className="bg-highlight-500 h-full rounded-full" style={{ width: `${passRate}%` }} />
-                    </div>
-                  </div>
-
-                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full self-start sm:self-center">
-                    Audited • Valid
-                  </span>
+        <Panel className="lg:col-span-4">
+          <PanelHeader title="Assessment outcomes" description="Graded attempts across the platform." />
+          {kpis.isPending || !kpis.data ? (
+            <Skeleton className="h-52 w-full" />
+          ) : (
+            <div className="flex flex-col items-center gap-5 py-4">
+              <Donut pass={Math.round(kpis.data.passRate)} label="Assessment pass rate" />
+              <div className="grid w-full grid-cols-2 gap-3 text-center">
+                <div className="rounded-2xl bg-ok-bg p-3">
+                  <p className="tnum text-xl font-extrabold text-ok">{formatNumber(kpis.data.passFail.pass)}</p>
+                  <p className="text-xs font-semibold text-ink-600">Passed</p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <div className="rounded-2xl bg-bad-bg p-3">
+                  <p className="tnum text-xl font-extrabold text-bad">{formatNumber(kpis.data.passFail.fail)}</p>
+                  <p className="text-xs font-semibold text-ink-600">Failed</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Panel>
       </div>
-    </DashboardShell>
+
+      <Panel className="mt-6">
+        <PanelHeader
+          title="Background processing"
+          description="Queues that deliver audit events, notifications and Stripe webhooks."
+          action={<Badge tone={health.data?.workers.every((w) => w.ok) ? "ok" : "warn"} dot>{health.data?.workers.every((w) => w.ok) ? "Healthy" : "Needs attention"}</Badge>}
+        />
+        {health.isError ? (
+          <ErrorState message={health.error instanceof Error ? health.error.message : undefined} onRetry={() => void health.refetch()} />
+        ) : health.isPending || !health.data ? (
+          <div className="grid gap-3 sm:grid-cols-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-24" />)}</div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink-900"><ServerCog className="size-4" aria-hidden /> Audit outbox</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.auditQueue.pending)}</p>
+              <p className="text-xs text-ink-600">pending · oldest {health.data.auditQueue.oldestMinutes} min · {formatNumber(health.data.auditQueue.deadLettered)} failed</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink-900"><Activity className="size-4" aria-hidden /> Stripe webhooks</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.webhooks.stuck)}</p>
+              <p className="text-xs text-ink-600">pending · {formatNumber(health.data.webhooks.failed)} failed</p>
+            </div>
+            <div className="rounded-2xl bg-canvas-soft p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink-900"><Award className="size-4" aria-hidden /> Notifications</p>
+              <p className="tnum mt-2 text-2xl font-extrabold text-ink-900">{formatNumber(health.data.email.pending)}</p>
+              <p className="text-xs text-ink-600">pending · {formatNumber(health.data.email.failed)} failed</p>
+            </div>
+          </div>
+        )}
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Worker status</caption>
+            <thead>
+              <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-600">
+                <th className="pb-2 font-semibold">Worker</th>
+                <th className="pb-2 font-semibold">Last activity</th>
+                <th className="pb-2 text-right font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {(health.data?.workers ?? []).map((worker) => (
+                <tr key={worker.name}>
+                  <td className="py-3 font-medium text-ink-900">{worker.name}</td>
+                  <td className="py-3 text-ink-600">{worker.lastRunSeconds}s ago</td>
+                  <td className="py-3 text-right"><Badge tone={worker.ok ? "ok" : "bad"} dot>{worker.ok ? "OK" : "Failing"}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </>
   );
 }

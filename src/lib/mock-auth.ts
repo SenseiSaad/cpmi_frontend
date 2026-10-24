@@ -77,6 +77,13 @@ export function mockLogin(email: string, password: string): User | null {
   return null;
 }
 
+// Used by the invitation flow to start a demo session for a newly created account.
+export function mockEstablishSession(user: User): void {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('mock_user', JSON.stringify(user));
+  }
+}
+
 export function mockGetCurrentUser(): User | null {
   if (typeof window !== 'undefined') {
     const stored = sessionStorage.getItem('mock_user');

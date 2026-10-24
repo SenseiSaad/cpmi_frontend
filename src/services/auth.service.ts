@@ -6,6 +6,7 @@ import {
   ForgotPasswordRequest,
   ResetPasswordRequest,
   AcceptInvitationRequest,
+  AcceptInvitationResponse,
 } from '@/types/auth';
 
 export const authService = {
@@ -23,15 +24,17 @@ export const authService = {
   },
 
   async forgotPassword(data: ForgotPasswordRequest): Promise<void> {
+    await apiClient.fetchCSRF();
     return apiClient.post<void>('/api/auth/password-reset/request', data);
   },
 
   async resetPassword(data: ResetPasswordRequest): Promise<void> {
+    await apiClient.fetchCSRF();
     return apiClient.post<void>('/api/auth/password-reset/confirm', data);
   },
 
-  async acceptInvitation(data: AcceptInvitationRequest): Promise<{ newAccount: boolean; user?: User }> {
+  async acceptInvitation(data: AcceptInvitationRequest): Promise<AcceptInvitationResponse> {
     await apiClient.fetchCSRF();
-    return apiClient.post<{ newAccount: boolean; user?: User }>('/api/invitations/accept', data);
+    return apiClient.post<AcceptInvitationResponse>('/api/invitations/accept', data);
   },
 };

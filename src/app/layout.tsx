@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+
+import { Providers } from "@/components/providers";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,12 +11,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" dir="ltr">
       <body>
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
