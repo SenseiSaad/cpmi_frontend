@@ -366,6 +366,18 @@ export const mockApi = {
       await delay(500);
       return { url: "#stripe-billing-portal" };
     },
+    async resumeCheckout(orderPublicId: string): Promise<{ checkoutUrl: string }> {
+      await delay(500);
+      const order = state.orders.find((o) => o.publicId === orderPublicId) ?? fail("not_found", "Order not found");
+      if (order.status !== "pending") fail("conflict", "This order is no longer awaiting payment");
+      // Card orders reopen Checkout; invoice orders open Stripe's hosted invoice page.
+      return { checkoutUrl: order.paymentMethod === "card" ? "/billing/success?session_id=cs_test_demo" : "/agency/orders" };
+    },
+    /** Demo only: nothing to settle against Stripe; reports what is still pending. */
+    async refreshPending(): Promise<{ fulfilled: number; pending: number }> {
+      await delay(300);
+      return { fulfilled: 0, pending: state.orders.filter((o) => o.status === "pending").length };
+    },
   },
 
   platform: {

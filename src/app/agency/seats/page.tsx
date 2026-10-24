@@ -71,7 +71,7 @@ export default function AgencySeatsPage() {
         width: "190px",
         align: "right",
         cell: (seat) => (
-          <div className="flex flex-wrap justify-end gap-1.5">
+          <div className="flex flex-wrap justify-start gap-1.5">
             <Button
               variant="secondary"
               size="sm"

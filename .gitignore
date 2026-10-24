@@ -1,36 +1,16 @@
-# dependencies
 node_modules/
-
-# next.js
 .next/
 out/
 .vercel/
 
-# env — secrets never committed
 .env
 .env.local
 .env.*.local
-.env.development
-# .env.production holds only PUBLIC build settings (API proxy target) and is committed
-# on purpose, so a push to GitHub is all Vercel needs.
-!.env.production
 
-# logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# editors / OS
-.vscode/
-.idea/
 .DS_Store
 Thumbs.db
-
-# build artifacts
-*.tsbuildinfo
-test-results
-
-# local tooling
-.claude/
-.mcp.json

@@ -86,7 +86,7 @@ export default function AdminCatalogPage() {
       width: "230px",
       align: "right",
       cell: (p) => (
-        <div className="flex flex-wrap justify-end gap-1.5">
+        <div className="flex flex-wrap justify-start gap-1.5">
           <Button variant="secondary" size="sm" onClick={() => { setPriceForm({ billingPeriod: "annual", amount: "" }); setPriceFor(p); }}>
             Add price
           </Button>
