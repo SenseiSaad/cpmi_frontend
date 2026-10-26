@@ -119,7 +119,7 @@ export default function LearnerDashboard() {
                       </div>
                       <div className="flex w-28 shrink-0 items-center gap-2">
                         <ProgressBar value={enrollment.progress_percent} label={`${enrollment.course.title} progress`} />
-                        <span className="tnum w-8 text-right text-xs font-semibold text-ink-700">{Math.round(enrollment.progress_percent)}%</span>
+                        <span className="tnum w-8 text-left text-xs font-semibold text-ink-700">{Math.round(enrollment.progress_percent)}%</span>
                       </div>
                     </Link>
                   </li>

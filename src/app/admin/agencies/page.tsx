@@ -220,7 +220,7 @@ export default function AdminAgenciesPage() {
               Clear
             </Button>
           ) : null}
-          <span className="tnum ml-auto text-sm text-ink-600">{formatNumber(query.data?.total ?? 0)} agencies</span>
+          <span className="tnum text-sm text-ink-600">{formatNumber(query.data?.total ?? 0)} agencies</span>
         </form>
 
         <DataTable

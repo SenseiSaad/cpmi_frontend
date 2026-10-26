@@ -119,6 +119,13 @@ export function setMockIdentity(user: SessionUser | null) {
 
 // ---- API -----------------------------------------------------------------------------------------------
 
+/** Courses a demo product can sell (the live adapter reads these from the API). */
+const MOCK_COURSES = [
+  { publicId: "course-dbe-program", title: "DBE / ACDBE Certification Program", published: true },
+  { publicId: "course-acdbe", title: "ACDBE Airport Concessions", published: true },
+  { publicId: "course-contract-201", title: "Contract Compliance 201 (draft)", published: false },
+];
+
 export interface MemberQuery {
   status?: MembershipStatus | "all";
   search?: string;
@@ -366,6 +373,18 @@ export const mockApi = {
       await delay(500);
       return { url: "#stripe-billing-portal" };
     },
+    async resumeCheckout(orderPublicId: string): Promise<{ checkoutUrl: string }> {
+      await delay(500);
+      const order = state.orders.find((o) => o.publicId === orderPublicId) ?? fail("not_found", "Order not found");
+      if (order.status !== "pending") fail("conflict", "This order is no longer awaiting payment");
+      // Card orders reopen Checkout; invoice orders open Stripe's hosted invoice page.
+      return { checkoutUrl: order.paymentMethod === "card" ? "/billing/success?session_id=cs_test_demo" : "/agency/orders" };
+    },
+    /** Demo only: nothing to settle against Stripe; reports what is still pending. */
+    async refreshPending(): Promise<{ fulfilled: number; pending: number }> {
+      await delay(300);
+      return { fulfilled: 0, pending: state.orders.filter((o) => o.status === "pending").length };
+    },
   },
 
   platform: {
@@ -448,12 +467,17 @@ export const mockApi = {
       state.catalog.unshift(product);
       return clone(product);
     },
-    async attachContent(publicId: string, kind: "course" | "module", title: string): Promise<void> {
+    async courses(): Promise<{ publicId: string; title: string; published: boolean }[]> {
+      await delay(200);
+      return MOCK_COURSES.map((c) => ({ ...c }));
+    },
+    async attachContent(publicId: string, kind: "course" | "module", refId: string): Promise<void> {
       await delay(400);
       const p = state.catalog.find((x) => x.publicId === publicId) ?? fail("not_found", "Product not found");
       if (p.status !== "draft") fail("conflict", "product content can only be attached while the product is draft");
       if ((p.productType === "program") !== (kind === "course")) fail("conflict", "product type and content target do not match");
-      p.content = { kind, title };
+      const course = MOCK_COURSES.find((c) => c.publicId === refId);
+      p.content = { kind, title: course?.title ?? refId };
     },
     async setStatus(publicId: string, action: "activate" | "retire"): Promise<void> {
       await delay(420);

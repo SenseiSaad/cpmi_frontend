@@ -53,21 +53,21 @@ export default function AgencySettingsPage() {
         <Panel>
           <PanelHeader title="Agency" description="Tenant identity and your membership." action={<Building2 className="size-5 text-ink-500" aria-hidden />} />
           <dl className="space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-col items-start gap-1 border-b border-line pb-3">
               <dt className="text-ink-600">Name</dt>
-              <dd className="text-right font-semibold text-ink-900">{user?.agency?.displayName ?? "—"}</dd>
+              <dd className="text-left font-semibold text-ink-900">{user?.agency?.displayName ?? "—"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-col items-start gap-1 border-b border-line pb-3">
               <dt className="text-ink-600">Slug</dt>
               <dd className="font-mono text-xs text-ink-900">{user?.agency?.slug ?? "—"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-col items-start gap-1 border-b border-line pb-3">
               <dt className="text-ink-600">Your role</dt>
               <dd><Badge tone="navy">{user?.role.replace(/_/g, " ") ?? "—"}</Badge></dd>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col items-start gap-1">
               <dt className="flex items-center gap-1.5 text-ink-600"><UserRound className="size-4" aria-hidden /> Signed in as</dt>
-              <dd className="text-right">
+              <dd className="text-left">
                 <p className="font-semibold text-ink-900">{user ? `${user.firstName} ${user.lastName}` : "—"}</p>
                 <p className="font-mono text-xs text-ink-600">{user?.email ?? "—"}</p>
               </dd>
@@ -111,7 +111,7 @@ export default function AgencySettingsPage() {
                   </p>
                 </div>
                 <ProgressBar value={ent.seatCapacity > 0 ? (ent.seatsUsed / ent.seatCapacity) * 100 : 0} label={`${ent.productName} seats`} showValue />
-                <div className="flex items-center gap-3 sm:justify-end">
+                <div className="flex items-center gap-3 sm:justify-start">
                   <span className="tnum text-sm text-ink-600">{formatNumber(ent.seatsUsed)} / {formatNumber(ent.seatCapacity)}</span>
                   <StatusPill status={ent.status} />
                 </div>

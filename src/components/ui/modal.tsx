@@ -112,7 +112,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
                 </button>
               </div>
               <div className="thin-scroll overflow-y-auto px-6 py-3">{children}</div>
-              {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line px-6 py-4">{footer}</div> : null}
+              {footer ? <div className="flex flex-wrap justify-start gap-2 border-t border-line px-6 py-4">{footer}</div> : null}
             </motion.div>
           </div>
         ) : null}
@@ -154,7 +154,7 @@ export function Drawer({ open, onClose, title, description, children, footer, cl
                 </button>
               </div>
               <div className="thin-scroll flex-1 overflow-y-auto px-6 py-5">{children}</div>
-              {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line px-6 py-4">{footer}</div> : null}
+              {footer ? <div className="flex flex-wrap justify-start gap-2 border-t border-line px-6 py-4">{footer}</div> : null}
             </motion.div>
           </div>
         ) : null}

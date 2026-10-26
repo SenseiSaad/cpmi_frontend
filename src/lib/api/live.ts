@@ -370,6 +370,28 @@ export const liveApi = {
     async billingPortal(): Promise<{ url: string }> {
       return http<{ url: string }>("POST", `/api/agencies/${agencyId()}/billing-portal`);
     },
+    /**
+     * Where an unpaid order can still be paid: the open Stripe Checkout page for a card order, or the
+     * hosted invoice for a purchase-order invoice. The server first checks Stripe, so an order that was
+     * already paid is never sent to pay again.
+     */
+    async resumeCheckout(orderPublicId: string): Promise<{ checkoutUrl: string }> {
+      return http<{ checkoutUrl: string }>("POST", `/api/agencies/${agencyId()}/orders/${orderPublicId}/checkout`);
+    },
+    /**
+     * Ask Stripe about the agency's pending orders and activate any that are really paid. This is what
+     * confirms a payment when the Stripe webhook has not delivered (or has not been set up yet).
+     */
+    async refreshPending(): Promise<{ fulfilled: number; pending: number }> {
+      const raw = await http<{ orders: { order: { status: string } }[]; fulfilled: number }>(
+        "POST",
+        `/api/agencies/${agencyId()}/orders/refresh`,
+      );
+      return {
+        fulfilled: bestEffortNumber(raw.fulfilled),
+        pending: asArray<any>(raw.orders).filter((o) => o?.order?.status === "pending").length,
+      };
+    },
   },
 
   platform: {
@@ -505,6 +527,15 @@ export const liveApi = {
     async createProduct(input: { code: string; name: string; productType: "program" | "module" }): Promise<CatalogProduct> {
       const raw = await http<{ product: any }>("POST", "/api/catalog/products", input);
       return mapCatalogProduct(raw.product);
+    },
+    /** Courses a product can sell. `published` means a published version exists, so it is ready to sell. */
+    async courses(): Promise<{ publicId: string; title: string; published: boolean }[]> {
+      const raw = await http<any>("GET", "/api/platform/courses", undefined, { query: { page: 1, pageSize: 100 } });
+      return asArray<any>(raw.items ?? raw.courses).map((c) => ({
+        publicId: c.uuid ?? c.publicId,
+        title: c.title,
+        published: c.current_version !== null && c.current_version !== undefined,
+      }));
     },
     async attachContent(publicId: string, kind: "course" | "module", refId: string): Promise<void> {
       await http("POST", `/api/catalog/products/${publicId}/content`, kind === "course" ? { coursePublicId: refId } : { modulePublicId: refId });
