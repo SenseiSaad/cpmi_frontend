@@ -528,6 +528,15 @@ export const liveApi = {
       const raw = await http<{ product: any }>("POST", "/api/catalog/products", input);
       return mapCatalogProduct(raw.product);
     },
+    /** Courses a product can sell. `published` means a published version exists, so it is ready to sell. */
+    async courses(): Promise<{ publicId: string; title: string; published: boolean }[]> {
+      const raw = await http<any>("GET", "/api/platform/courses", undefined, { query: { page: 1, pageSize: 100 } });
+      return asArray<any>(raw.items ?? raw.courses).map((c) => ({
+        publicId: c.uuid ?? c.publicId,
+        title: c.title,
+        published: c.current_version !== null && c.current_version !== undefined,
+      }));
+    },
     async attachContent(publicId: string, kind: "course" | "module", refId: string): Promise<void> {
       await http("POST", `/api/catalog/products/${publicId}/content`, kind === "course" ? { coursePublicId: refId } : { modulePublicId: refId });
     },
