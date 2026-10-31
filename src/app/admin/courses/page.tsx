@@ -66,8 +66,11 @@ export default function AdminCatalogPage() {
   });
   const addPrice = useAction(api.catalog.addPrice, { invalidate: ["catalog"], success: "Price added" });
 
-  // The API returns oldest first; show the newest product at the top.
-  const rows = useMemo(() => [...(catalog.data ?? [])].reverse(), [catalog.data]);
+  // A-Z by name, numbers in natural order (Module 2 before Module 10).
+  const rows = useMemo(
+    () => [...(catalog.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" })),
+    [catalog.data],
+  );
 
   const columns: Column<CatalogProduct>[] = [
     {

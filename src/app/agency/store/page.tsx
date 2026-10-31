@@ -29,7 +29,7 @@ export default function AgencyStorePage() {
   const [search, setSearch] = useState("");
   const visibleProducts = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const all = products.data ?? [];
+    const all = [...(products.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" }));
     if (!needle) return all;
     return all.filter((p) => `${p.name} ${p.code} ${p.productType}`.toLowerCase().includes(needle));
   }, [products.data, search]);
