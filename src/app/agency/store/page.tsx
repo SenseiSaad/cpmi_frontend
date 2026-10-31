@@ -1,7 +1,7 @@
 "use client";
 
 import { CreditCard, ExternalLink, Receipt, ShoppingCart } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,15 @@ export default function AgencyStorePage() {
   const [placedId, setPlacedId] = useState<string | null>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
+
+  const submitting = useRef(false);
+  const [search, setSearch] = useState("");
+  const visibleProducts = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const all = products.data ?? [];
+    if (!needle) return all;
+    return all.filter((p) => `${p.name} ${p.code} ${p.productType}`.toLowerCase().includes(needle));
+  }, [products.data, search]);
 
   const placeOrder = useAction(api.store.placeOrder, { invalidate: ["orders", "entitlements", "agency-overview"], success: "Order created" });
 
@@ -57,6 +66,9 @@ export default function AgencyStorePage() {
   function submitOrder(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedPrice) return;
+    // React state updates after the first click, so a fast double-click would otherwise place two orders.
+    if (submitting.current) return;
+    submitting.current = true;
     void placeOrder
       .run({
         priceId: selectedPrice.id,
@@ -65,11 +77,15 @@ export default function AgencyStorePage() {
         ...(paymentMethod === "invoice" && poNumber.trim() ? { purchaseOrderNumber: poNumber.trim() } : {}),
       })
       .then((result) => {
-        if (!result || result === true) return;
-        if (result.checkoutUrl) {
-          window.location.assign(result.checkoutUrl);
+        if (!result || result === true) {
+          submitting.current = false; // failed: allow a retry
           return;
         }
+        if (result.checkoutUrl) {
+          window.location.assign(result.checkoutUrl); // leaving the page: keep the guard on
+          return;
+        }
+        submitting.current = false;
         setPlacedId(result.order.publicId);
       });
   }
@@ -98,8 +114,26 @@ export default function AgencyStorePage() {
         </Panel>
       ) : (
         <div className="grid gap-6 lg:grid-cols-12">
-          <div className="grid gap-4 sm:grid-cols-2 lg:col-span-7">
-            {products.data?.map((product) => {
+          <div className="lg:col-span-7">
+          <div className="mb-4">
+            <label htmlFor="store-search" className="sr-only">Search products</label>
+            <Input
+              id="store-search"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or code, e.g. Foundations"
+              autoComplete="off"
+            />
+            <p className="mt-1.5 text-xs text-ink-600" aria-live="polite">
+              {search.trim() ? `${visibleProducts.length} of ${products.data?.length ?? 0} products match` : `${products.data?.length ?? 0} products on sale`}
+            </p>
+          </div>
+          {visibleProducts.length === 0 ? (
+            <p className="rounded-2xl bg-white p-6 text-sm text-ink-600 shadow-card">No product matches &ldquo;{search.trim()}&rdquo;.</p>
+          ) : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {visibleProducts.map((product) => {
               const active = product.publicId === activeProduct?.publicId;
               const prices = product.prices.filter((price) => price.isActive);
               return (
@@ -130,6 +164,7 @@ export default function AgencyStorePage() {
                 </button>
               );
             })}
+          </div>
           </div>
 
           <Panel className="lg:col-span-5">

@@ -63,6 +63,8 @@ const config: Config = {
           700: "#1c371a",
           800: "#152a13",
           900: "#0e1d0d",
+          // The landing, sign-in and verification pages use primary-950 (footer, hero gradient, dark text on gold).
+          950: "#091408",
         },
         secondary: {
           DEFAULT: "#CFB112",

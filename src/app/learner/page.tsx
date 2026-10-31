@@ -62,7 +62,7 @@ export default function LearnerDashboard() {
           <Panel>
             <PanelHeader
               title={active ? "Continue learning" : "Your courses"}
-              description={active ? active.course.title : "You are not enrolled in a course yet."}
+              description={active ? active.course.title : enrollments.isPending ? "Loading your courses…" : "You are not enrolled in a course yet."}
               action={active ? <Link href={`/learner/courses/${active.uuid}`} className="text-sm font-semibold text-brand-700 hover:text-brand-800">Open course</Link> : null}
             />
             {enrollments.isPending ? (
@@ -119,7 +119,7 @@ export default function LearnerDashboard() {
                       </div>
                       <div className="flex w-28 shrink-0 items-center gap-2">
                         <ProgressBar value={enrollment.progress_percent} label={`${enrollment.course.title} progress`} />
-                        <span className="tnum w-8 text-right text-xs font-semibold text-ink-700">{Math.round(enrollment.progress_percent)}%</span>
+                        <span className="tnum w-8 text-left text-xs font-semibold text-ink-700">{Math.round(enrollment.progress_percent)}%</span>
                       </div>
                     </Link>
                   </li>

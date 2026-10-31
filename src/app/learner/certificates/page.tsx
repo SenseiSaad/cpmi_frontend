@@ -115,7 +115,7 @@ function CertificateCanvas({ cert, learnerName }: { cert: MyCertificate; learner
           </div>
 
           {/* Right Signature */}
-          <div className="space-y-1 text-center sm:text-right">
+          <div className="space-y-1 text-left">
             <div className="pb-1 font-serif text-xl font-bold italic text-primary-900">Certification Academy</div>
             <div className="h-px w-40 bg-gray-300" />
             <p className="text-[10px] font-bold uppercase text-gray-500">Authorized Signing Authority</p>

@@ -900,8 +900,8 @@ function AttemptHistory({
                 <th scope="col" className="px-4 py-3">Attempt</th>
                 <th scope="col" className="hidden px-4 py-3 sm:table-cell">Started</th>
                 <th scope="col" className="px-4 py-3">Status</th>
-                <th scope="col" className="px-4 py-3 text-right">Score</th>
-                <th scope="col" className="px-4 py-3 text-right">Action</th>
+                <th scope="col" className="px-4 py-3 text-left">Score</th>
+                <th scope="col" className="px-4 py-3 text-left">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
@@ -923,10 +923,10 @@ function AttemptHistory({
                         {STATUS_LABEL[item.status]}
                       </span>
                     </td>
-                    <td className="tnum px-4 py-3 text-right font-black text-gray-900">
+                    <td className="tnum px-4 py-3 text-left font-black text-gray-900">
                       {item.scorePercent === null ? "—" : `${Math.round(item.scorePercent)}%`}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-left">
                       <button
                         onClick={() => onSelect(item.attemptPublicId)}
                         disabled={isCurrent}

@@ -17,7 +17,10 @@ const POINTS = [
 function HeroPanel() {
   return (
     <div className="relative hidden overflow-hidden bg-navy-900 lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
-      <div className="bg-grid pointer-events-none absolute inset-0 opacity-70" aria-hidden />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/images/building-entrance.webp" alt="" aria-hidden="true" width={1400} height={1050} className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-30 mix-blend-luminosity" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-navy-900/70 via-navy-900/60 to-navy-950/90" aria-hidden />
+      <div className="bg-grid pointer-events-none absolute inset-0 opacity-40" aria-hidden />
       <div className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full bg-brand-600/30 blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -bottom-32 -left-20 size-[26rem] rounded-full bg-navy-600/50 blur-3xl" aria-hidden />
 

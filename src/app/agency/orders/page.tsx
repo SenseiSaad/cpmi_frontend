@@ -1,7 +1,8 @@
 "use client";
 
-import { CreditCard, Receipt } from "lucide-react";
-import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { CreditCard, FileText, Receipt, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusPill } from "@/components/ui/badge";
@@ -9,12 +10,15 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Panel } from "@/components/ui/panel";
 import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { useAction, useOrders } from "@/lib/api/hooks";
 import type { Order } from "@/lib/api/types";
 import { formatCurrency, formatNumber, relativeDays } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
+/** Queries that change when an order is activated (new entitlement, new seats). */
+const AFFECTED_QUERIES = ["orders", "entitlements", "seats"] as const;
 
 function buildColumns(onPay: (orderId: string) => void, payingId: string | null): Column<Order>[] {
   return [
@@ -56,29 +60,79 @@ function buildColumns(onPay: (orderId: string) => void, payingId: string | null)
       header: "Action",
       width: "170px",
       align: "right",
-      cell: (o) =>
-        o.status === "pending" && o.paymentMethod === "card" ? (
+      cell: (o) => {
+        if (o.status !== "pending") return null;
+        const isCard = o.paymentMethod === "card";
+        return (
           <Button
             size="sm"
-            icon={<CreditCard className="size-4" aria-hidden />}
+            icon={isCard ? <CreditCard className="size-4" aria-hidden /> : <FileText className="size-4" aria-hidden />}
             loading={payingId === o.publicId}
             disabled={payingId !== null}
             onClick={() => onPay(o.publicId)}
           >
-            Complete payment
+            {isCard ? "Complete payment" : "Pay invoice"}
           </Button>
-        ) : null,
+        );
+      },
     },
   ];
 }
 
 export default function AgencyOrdersPage() {
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const orders = useOrders({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   const total = orders.data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const resume = useAction(api.store.resumeCheckout);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  /**
+   * Ask the server to settle pending orders against Stripe. This is what confirms a payment when the
+   * Stripe webhook did not (or has not yet been set up to) tell us, e.g. right after returning from
+   * Checkout, or when an invoice was paid later by someone else.
+   */
+  const checkPayments = useCallback(
+    async (announce: boolean) => {
+      setChecking(true);
+      let result: { fulfilled: number; pending: number } | null = null;
+      try {
+        result = await api.store.refreshPending();
+      } catch (error) {
+        // The automatic check on arrival stays quiet (the list below still loads); only a click on
+        // "Check payment status" reports a problem.
+        if (announce) toast.error("Could not check payments", error instanceof Error ? error.message : undefined);
+      }
+      setChecking(false);
+      if (!result) return;
+      if (result.fulfilled > 0) {
+        toast.success(
+          result.fulfilled === 1 ? "Payment confirmed" : `${result.fulfilled} payments confirmed`,
+          "Your seats are ready to assign.",
+        );
+      } else if (announce) {
+        toast.info(
+          result.pending > 0 ? "No payment received yet" : "Everything is up to date",
+          result.pending > 0 ? "Stripe has not recorded a payment for your pending orders yet." : undefined,
+        );
+      }
+      await Promise.all(AFFECTED_QUERIES.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+    },
+    // `toast` is stable; listing it would re-create this on every render and re-run the arrival check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient],
+  );
+
+  // Once on arrival (including the return from Stripe Checkout), settle whatever Stripe already knows.
+  const checkedOnArrival = useRef(false);
+  useEffect(() => {
+    if (checkedOnArrival.current) return;
+    checkedOnArrival.current = true;
+    void checkPayments(false);
+  }, [checkPayments]);
 
   async function completePayment(orderId: string) {
     setPayingId(orderId);
@@ -88,7 +142,7 @@ export default function AgencyOrdersPage() {
       return; // keep the button busy while the browser leaves for Stripe
     }
     setPayingId(null);
-    void orders.refetch(); // e.g. the payment already went through, or the order was voided
+    void checkPayments(false); // e.g. it turned out to be paid already, or the link had expired
   }
 
   return (
@@ -97,7 +151,16 @@ export default function AgencyOrdersPage() {
         eyebrow="Agency"
         title="Order history"
         subtitle="Card payments and purchase-order invoices for your agency."
-        actions={<ButtonLink href="/agency/store" variant="primary" icon={<Receipt className="size-4" aria-hidden />}>Buy seats</ButtonLink>}
+        actions={
+          <>
+            <Button variant="secondary" loading={checking} icon={<RefreshCw className="size-4" aria-hidden />} onClick={() => void checkPayments(true)}>
+              Check payment status
+            </Button>
+            <ButtonLink href="/agency/store" variant="primary" icon={<Receipt className="size-4" aria-hidden />}>
+              Buy seats
+            </ButtonLink>
+          </>
+        }
       />
 
       <Panel>

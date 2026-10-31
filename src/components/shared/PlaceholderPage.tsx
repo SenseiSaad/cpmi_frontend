@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { LucideIcon } from "lucide-react";
-import Card from "@/components/ui/Card";
+import Card from "@/components/ui/card";
 
 interface PlaceholderPageProps {
   title: string;

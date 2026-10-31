@@ -148,13 +148,17 @@ export default function HomePage() {
       <main id="main-content">
         {/* HERO SECTION (Screen 1 Reference) */}
         <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-primary-900 py-16 lg:py-24">
-          <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-25 mix-blend-luminosity scale-105"
-            style={{
-              backgroundImage: "url('https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1800&q=80')",
-            }}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/hero-campus.webp"
+            alt=""
+            aria-hidden="true"
+            width={1680}
+            height={1087}
+            fetchPriority="high"
+            className="absolute inset-0 h-full w-full object-cover object-center opacity-50"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-950 via-primary-900/95 to-primary-900/80" />
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-950 via-primary-900/90 to-primary-900/55" />
 
           {/* Decorative subtle grid */}
           <div className="absolute inset-0 bg-[radial-gradient(#CFB112_1px,transparent_1px)] [background-size:32px_32px] opacity-10 pointer-events-none" />
@@ -334,6 +338,27 @@ export default function HomePage() {
                 Non-compliance can jeopardize hundreds of millions of dollars in federal infrastructure grant funding.
               </p>
             </motion.div>
+
+            <motion.figure
+              variants={fadeUp}
+              initial="initial"
+              whileInView="whileInView"
+              className="relative mb-12 overflow-hidden rounded-3xl shadow-card"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/building-aerial.webp"
+                alt="Aerial view of a state transportation department headquarters and its surrounding campus"
+                width={1400}
+                height={906}
+                loading="lazy"
+                decoding="async"
+                className="h-56 w-full object-cover sm:h-72 lg:h-80"
+              />
+              <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-primary-950/85 to-transparent px-6 pb-5 pt-16 text-left text-sm font-medium text-white sm:text-base">
+                Built for the teams who run DBE and ACDBE programs at transportation agencies.
+              </figcaption>
+            </motion.figure>
 
             <div className="grid md:grid-cols-3 gap-8">
               {[
@@ -518,6 +543,23 @@ export default function HomePage() {
                 A purpose-built ecosystem for agency directors, compliance staff, and program administrators.
               </p>
             </motion.div>
+
+            {/* One photo per audience, lined up with the three cards below */}
+            <div className="mb-8 grid gap-4 md:grid-cols-3 md:gap-8">
+              {[
+                { src: "/images/building-modern.webp", alt: "Modern agency office building with a landscaped campus", label: "Agencies" },
+                { src: "/images/building-entrance.webp", alt: "Public entrance of a government office building", label: "Learners" },
+                { src: "/images/building-green.webp", alt: "Glass headquarters building with a walkway through green grounds", label: "Program leadership" },
+              ].map((photo) => (
+                <figure key={photo.src} className="relative overflow-hidden rounded-3xl">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.src} alt={photo.alt} width={1400} height={934} loading="lazy" decoding="async" className="h-40 w-full object-cover sm:h-48" />
+                  <figcaption className="absolute left-3 top-3 rounded-full bg-primary-950/80 px-3 py-1 text-xs font-bold uppercase tracking-wider text-secondary-400">
+                    {photo.label}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
 
             <div className="grid md:grid-cols-3 gap-8">
               {/* Card 1 */}
@@ -1024,6 +1066,17 @@ export default function HomePage() {
 
         {/* FINAL HIGH-IMPACT CALL TO ACTION */}
         <section className="py-20 bg-secondary-500 text-primary-950 relative overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/building-green.webp"
+            alt=""
+            aria-hidden="true"
+            width={1600}
+            height={1200}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-multiply"
+          />
           <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center relative z-10">
             <motion.div variants={fadeUp} initial="initial" whileInView="whileInView">
               <span className="text-primary-950/80 font-black text-xs uppercase tracking-widest bg-primary-950/10 px-3.5 py-1 rounded-full">

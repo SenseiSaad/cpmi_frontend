@@ -12,6 +12,10 @@ export interface Column<T> {
   /** CSS grid track, e.g. "minmax(0,1.6fr)" or "90px". */
   width?: string;
   cell: (row: T) => ReactNode;
+  /**
+   * Kept so existing column definitions keep compiling. It has no effect: every column, header and cell
+   * is left-aligned across the platform (numbers included), by design.
+   */
   align?: "left" | "right" | "center";
   /** Hide the label in the stacked mobile layout (e.g. for the primary/title cell and actions). */
   hideLabelOnMobile?: boolean;
@@ -32,7 +36,8 @@ interface DataTableProps<T> {
 
 /**
  * Pill-row table inspired by the reference design. Becomes stacked cards on small screens
- * (each cell shows its column label), so no horizontal scrolling is ever needed.
+ * (each cell shows its column label above its value), so no horizontal scrolling is ever needed.
+ * Everything is left-aligned.
  */
 export function DataTable<T>({ columns, rows, rowKey, loading, error, onRetry, empty, caption, onRowClick, className }: DataTableProps<T>) {
   const template = columns.map((c) => c.width ?? "minmax(0,1fr)").join(" ");
@@ -43,11 +48,11 @@ export function DataTable<T>({ columns, rows, rowKey, loading, error, onRetry, e
   if (rows.length === 0) return <EmptyState title={empty?.title ?? "Nothing here yet"} description={empty?.description} action={empty?.action} />;
 
   return (
-    <div role="table" aria-label={caption} className={cn("w-full", className)} style={style}>
+    <div role="table" aria-label={caption} className={cn("w-full text-left", className)} style={style}>
       <div role="rowgroup" className="hidden md:block">
-        <div role="row" className="grid items-center gap-4 px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-ink-600 md:[grid-template-columns:var(--cols)]">
+        <div role="row" className="grid items-center gap-4 px-4 pb-2 text-left text-xs font-semibold uppercase tracking-wider text-ink-600 md:[grid-template-columns:var(--cols)]">
           {columns.map((c) => (
-            <div key={c.key} role="columnheader" className={cn(c.align === "right" && "text-right", c.align === "center" && "text-center")}>
+            <div key={c.key} role="columnheader" className="text-left">
               {c.header}
             </div>
           ))}
@@ -67,18 +72,14 @@ export function DataTable<T>({ columns, rows, rowKey, loading, error, onRetry, e
               onKeyDown={clickable ? (e) => (e.key === "Enter" ? onRowClick(row) : undefined) : undefined}
               tabIndex={clickable ? 0 : undefined}
               className={cn(
-                "grid gap-x-4 gap-y-2.5 rounded-2xl bg-canvas-soft px-4 py-3.5 ring-1 ring-transparent transition-all duration-200 md:items-center md:[grid-template-columns:var(--cols)]",
+                "grid gap-x-4 gap-y-3 rounded-2xl bg-canvas-soft px-4 py-3.5 text-left ring-1 ring-transparent transition-all duration-200 md:items-center md:[grid-template-columns:var(--cols)]",
                 clickable && "cursor-pointer hover:bg-white hover:shadow-card hover:ring-line focus-visible:bg-white",
               )}
             >
               {columns.map((c) => (
-                <div
-                  key={c.key}
-                  role="cell"
-                  className={cn("flex min-w-0 items-center justify-between gap-3 text-sm text-ink-900 md:block", c.align === "right" && "md:text-right", c.align === "center" && "md:text-center")}
-                >
+                <div key={c.key} role="cell" className="flex min-w-0 flex-col items-start gap-0.5 text-left text-sm text-ink-900 md:block">
                   <span className={cn("shrink-0 text-xs font-semibold uppercase tracking-wide text-ink-600 md:hidden", c.hideLabelOnMobile && "hidden")}>{c.header}</span>
-                  <div className={cn("min-w-0", !c.hideLabelOnMobile && "text-right md:text-inherit", c.align === "right" && "md:flex md:justify-end")}>{c.cell(row)}</div>
+                  <div className="min-w-0 text-left">{c.cell(row)}</div>
                 </div>
               ))}
             </motion.div>

@@ -154,7 +154,7 @@ function LessonDrawer({
                   <li key={resource.name} className="flex items-center gap-2 text-sm text-ink-700">
                     <FileText className="size-4 text-ink-500" aria-hidden />
                     <span className="truncate">{resource.name}</span>
-                    <span className="ml-auto text-xs text-ink-500">{resource.mimeType}</span>
+                    <span className="text-xs text-ink-500">{resource.mimeType}</span>
                   </li>
                 ))}
               </ul>
@@ -239,11 +239,11 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
         <Panel className="lg:col-span-4">
           <PanelHeader title="Course details" description="Assigned by your agency." />
           <dl className="space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-col items-start gap-1 border-b border-line pb-3">
               <dt className="text-ink-600">Agency</dt>
               <dd className="font-semibold text-ink-900">{data.agency.name}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-col items-start gap-1 border-b border-line pb-3">
               <dt className="text-ink-600">Due</dt>
               <dd className="font-semibold text-ink-900">{data.due_at ? new Date(data.due_at).toLocaleDateString() : "—"}</dd>
             </div>

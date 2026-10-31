@@ -79,7 +79,7 @@ export function LoginView() {
         <Field label="Password" error={errors.password?.message}>
           {({ id, describedBy, invalid }) => <Input id={id} type="password" autoComplete="current-password" placeholder="Your password" leading={<KeyRound className="size-4" aria-hidden />} invalid={invalid} aria-describedby={describedBy} {...register("password")} />}
         </Field>
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <Link href="/forgot-password" className="text-sm font-semibold text-brand-800 underline-offset-4 hover:underline">
             Forgot password?
           </Link>

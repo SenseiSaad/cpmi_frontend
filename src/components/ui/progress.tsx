@@ -22,7 +22,7 @@ export function ProgressBar({ value, label, tone = "brand", className, showValue
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-navy-900/[0.07]" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
         <motion.div className={cn("h-full rounded-full", BAR[tone])} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
       </div>
-      {showValue ? <span className="tnum w-10 text-right text-xs font-semibold text-ink-700">{pct}%</span> : null}
+      {showValue ? <span className="tnum w-10 text-left text-xs font-semibold text-ink-700">{pct}%</span> : null}
     </div>
   );
 }

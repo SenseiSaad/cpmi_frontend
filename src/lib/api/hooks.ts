@@ -38,6 +38,7 @@ export const useHealth = () => useQuery({ queryKey: ["health"], queryFn: () => a
 export const useAgencies = (q: { search?: string; status?: string; limit?: number; offset?: number }) => useQuery({ queryKey: ["agencies", q], queryFn: () => api.platform.agencies(q), placeholderData: keepPreviousData });
 export const useAgency = (id: string) => useQuery({ queryKey: ["agency", id], queryFn: () => api.platform.agency(id) });
 export const useAllOrders = (q: { limit?: number; offset?: number; status?: string }) => useQuery({ queryKey: ["all-orders", q], queryFn: () => api.platform.allOrders(q), placeholderData: keepPreviousData });
+export const useCourseOptions = () => useQuery({ queryKey: ["catalog-courses"], queryFn: () => api.catalog.courses() });
 export const useCatalog = (status?: string) => useQuery({ queryKey: ["catalog", status ?? "all"], queryFn: () => api.catalog.products(status) });
 export const useCourse = () => useQuery({ queryKey: ["course"], queryFn: () => api.catalog.course() });
 export const useLearnCourse = () => useQuery({ queryKey: ["learn-course"], queryFn: () => api.learner.course() });

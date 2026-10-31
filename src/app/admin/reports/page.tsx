@@ -111,7 +111,7 @@ export default function AdminReportsPage() {
               <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-600">
                 <th className="pb-2 font-semibold">Worker</th>
                 <th className="pb-2 font-semibold">Last activity</th>
-                <th className="pb-2 text-right font-semibold">Status</th>
+                <th className="pb-2 text-left font-semibold">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -119,7 +119,7 @@ export default function AdminReportsPage() {
                 <tr key={worker.name}>
                   <td className="py-3 font-medium text-ink-900">{worker.name}</td>
                   <td className="py-3 text-ink-600">{worker.lastRunSeconds}s ago</td>
-                  <td className="py-3 text-right"><Badge tone={worker.ok ? "ok" : "bad"} dot>{worker.ok ? "OK" : "Failing"}</Badge></td>
+                  <td className="py-3 text-left"><Badge tone={worker.ok ? "ok" : "bad"} dot>{worker.ok ? "OK" : "Failing"}</Badge></td>
                 </tr>
               ))}
             </tbody>
