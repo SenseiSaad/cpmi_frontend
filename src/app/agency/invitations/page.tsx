@@ -8,17 +8,25 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { Input } from "@/components/ui/field";
+import { Pagination } from "@/components/ui/pagination";
 import { Panel } from "@/components/ui/panel";
 import { api } from "@/lib/api";
-import { useAction, useInvitations } from "@/lib/api/hooks";
+import { useAction } from "@/lib/api/hooks";
+import { useDebounced, useInvitationsPage } from "@/lib/api/lists";
 import type { Invitation } from "@/lib/api/types";
 import { relativeDays } from "@/lib/utils";
+
+const PAGE_SIZE = 10;
 
 export default function AgencyInvitationsPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const term = useDebounced(search.trim());
 
-  const invitations = useInvitations();
+  const invitations = useInvitationsPage({ search: term, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   const revoke = useAction(api.invitations.revoke, { invalidate: ["invitations"], success: "Invitation revoked" });
 
   const columns = useMemo<Column<Invitation>[]>(
@@ -75,20 +83,25 @@ export default function AgencyInvitationsPage() {
       />
 
       <Panel>
+        <div className="mb-4">
+          <label htmlFor="invite-search" className="sr-only">Search invitations</label>
+          <Input id="invite-search" type="search" autoComplete="off" placeholder="Search by email" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <DataTable
           caption="Pending invitations"
           columns={columns}
-          rows={invitations.data}
+          rows={invitations.data?.items}
           rowKey={(inv) => inv.id}
           loading={invitations.isPending}
           error={invitations.isError ? (invitations.error instanceof Error ? invitations.error.message : "Could not load invitations.") : undefined}
           onRetry={() => void invitations.refetch()}
           empty={{
-            title: "No pending invitations",
-            description: "Invite a colleague and they will appear here until they accept.",
+            title: term ? "No invitation matches" : "No pending invitations",
+            description: term ? "Try a different email." : "Invite a colleague and they will appear here until they accept.",
             action: <Button icon={<MailPlus className="size-4" aria-hidden />} onClick={() => setInviteOpen(true)}>Invite member</Button>,
           }}
         />
+        <div className="mt-4"><Pagination page={page} pageCount={Math.max(1, Math.ceil((invitations.data?.total ?? 0) / PAGE_SIZE))} onChange={setPage} total={invitations.data?.total ?? 0} pageSize={PAGE_SIZE} /></div>
       </Panel>
 
       <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />

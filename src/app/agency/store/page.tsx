@@ -7,15 +7,18 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ChoiceCard, Field, Input } from "@/components/ui/field";
+import { Pagination } from "@/components/ui/pagination";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { api } from "@/lib/api";
-import { useAction, useStoreProducts } from "@/lib/api/hooks";
+import { useAction } from "@/lib/api/hooks";
+import { useDebounced, useStorePage } from "@/lib/api/lists";
 import type { StoreProduct } from "@/lib/api/types";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+
+const PAGE_SIZE = 12;
 
 export default function AgencyStorePage() {
-  const products = useStoreProducts();
   const [selectedProduct, setSelectedProduct] = useState<StoreProduct | null>(null);
   const [priceId, setPriceId] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
@@ -27,12 +30,12 @@ export default function AgencyStorePage() {
 
   const submitting = useRef(false);
   const [search, setSearch] = useState("");
-  const visibleProducts = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const all = [...(products.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" }));
-    if (!needle) return all;
-    return all.filter((p) => `${p.name} ${p.code} ${p.productType}`.toLowerCase().includes(needle));
-  }, [products.data, search]);
+  const [page, setPage] = useState(1);
+  const term = useDebounced(search.trim());
+  // One page at a time, searched on the server, A-Z. Typing waits for a pause before it asks again.
+  const products = useStorePage({ search: term, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+  const visibleProducts = products.data?.items ?? [];
+  const totalProducts = products.data?.total ?? 0;
 
   const placeOrder = useAction(api.store.placeOrder, { invalidate: ["orders", "entitlements", "agency-overview"], success: "Order created" });
 
@@ -105,7 +108,7 @@ export default function AgencyStorePage() {
         <Panel><ErrorState message={products.error instanceof Error ? products.error.message : undefined} onRetry={() => void products.refetch()} /></Panel>
       ) : products.isPending ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-56" />)}</div>
-      ) : (products.data?.length ?? 0) === 0 ? (
+      ) : totalProducts === 0 && !term ? (
         <Panel>
           <div className="py-10 text-center">
             <p className="text-lg font-bold text-ink-900">No products are on sale</p>
@@ -121,18 +124,18 @@ export default function AgencyStorePage() {
               id="store-search"
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by name or code, e.g. Foundations"
               autoComplete="off"
             />
             <p className="mt-1.5 text-xs text-ink-600" aria-live="polite">
-              {search.trim() ? `${visibleProducts.length} of ${products.data?.length ?? 0} products match` : `${products.data?.length ?? 0} products on sale`}
+              {term ? `${totalProducts} product${totalProducts === 1 ? "" : "s"} match` : `${totalProducts} product${totalProducts === 1 ? "" : "s"} on sale`}
             </p>
           </div>
           {visibleProducts.length === 0 ? (
             <p className="rounded-2xl bg-white p-6 text-sm text-ink-600 shadow-card">No product matches &ldquo;{search.trim()}&rdquo;.</p>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={cn("grid gap-4 sm:grid-cols-2 transition-opacity", products.isPlaceholderData && "opacity-60")}>
             {visibleProducts.map((product) => {
               const active = product.publicId === activeProduct?.publicId;
               const prices = product.prices.filter((price) => price.isActive);
@@ -165,6 +168,7 @@ export default function AgencyStorePage() {
               );
             })}
           </div>
+          <div className="mt-5"><Pagination page={page} pageCount={Math.max(1, Math.ceil(totalProducts / PAGE_SIZE))} onChange={setPage} total={totalProducts} pageSize={PAGE_SIZE} /></div>
           </div>
 
           <Panel className="lg:col-span-5">

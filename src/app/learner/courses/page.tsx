@@ -38,7 +38,7 @@ export default function LearnerCoursesPage() {
           items={[
             { value: "all", label: "All", count: enrollments.data?.length },
             { value: "in_progress", label: "In progress" },
-            { value: "assigned", label: "Assigned" },
+            { value: "assigned", label: "Not started" },
             { value: "completed", label: "Completed" },
           ]}
         />
@@ -68,7 +68,7 @@ export default function LearnerCoursesPage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <Badge tone={enrollment.status === "completed" ? "ok" : enrollment.status === "in_progress" ? "brand" : "neutral"} dot>
-                  {enrollment.status.replace(/_/g, " ")}
+                  {enrollment.status === "assigned" ? "Not started" : enrollment.status.replace(/_/g, " ")}
                 </Badge>
                 <ChevronRight className="size-4 text-ink-400 transition-transform group-hover:translate-x-0.5" aria-hidden />
               </div>

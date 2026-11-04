@@ -7,13 +7,16 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge, StatusPill } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Field, Select } from "@/components/ui/field";
+import { MemberPicker } from "@/components/agency/member-picker";
+import { Field, Input } from "@/components/ui/field";
+import { Pagination } from "@/components/ui/pagination";
 import { Modal } from "@/components/ui/modal";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { ProgressBar } from "@/components/ui/progress";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { api } from "@/lib/api";
-import { useAction, useAllMembers, useEntitlements, useSeats } from "@/lib/api/hooks";
+import { useAction } from "@/lib/api/hooks";
+import { useDebounced, useEntitlementsPage, useSeatsPage } from "@/lib/api/lists";
 import type { Seat } from "@/lib/api/types";
 import { formatNumber, relativeDays } from "@/lib/utils";
 
@@ -22,11 +25,17 @@ function memberLabel(seat: Seat): string {
   return `${seat.member.firstName} ${seat.member.lastName}`.trim() || seat.member.email;
 }
 
+const ENT_PAGE = 6;
+const SEAT_PAGE = 10;
+
 export default function AgencySeatsPage() {
-  const entitlements = useEntitlements();
-  const members = useAllMembers();
+  const [entPage, setEntPage] = useState(1);
+  const entitlements = useEntitlementsPage({ limit: ENT_PAGE, offset: (entPage - 1) * ENT_PAGE });
   const [entitlementId, setEntitlementId] = useState<string | null>(null);
-  const seats = useSeats(entitlementId);
+  const [seatSearch, setSeatSearch] = useState("");
+  const [seatPage, setSeatPage] = useState(1);
+  const seatTerm = useDebounced(seatSearch.trim());
+  const seats = useSeatsPage(entitlementId, { search: seatTerm, limit: SEAT_PAGE, offset: (seatPage - 1) * SEAT_PAGE });
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignMembership, setAssignMembership] = useState("");
   const [reassignSeat, setReassignSeat] = useState<Seat | null>(null);
@@ -36,7 +45,7 @@ export default function AgencySeatsPage() {
   const release = useAction(api.seats.release, { invalidate: ["entitlements", "seats", "agency-overview"], success: "Seat released" });
   const reassign = useAction(api.seats.reassign, { invalidate: ["entitlements", "seats", "agency-overview"], success: "Seat reassigned" });
 
-  const entitlementList = entitlements.data ?? [];
+  const entitlementList = entitlements.data?.items ?? [];
 
   useEffect(() => {
     if (entitlementId) return;
@@ -45,7 +54,6 @@ export default function AgencySeatsPage() {
   }, [entitlementId, entitlementList]);
 
   const selected = entitlementList.find((ent) => ent.id === entitlementId) ?? null;
-  const activeMembers = useMemo(() => (members.data ?? []).filter((m) => m.membershipStatus === "active"), [members.data]);
 
   const columns = useMemo<Column<Seat>[]>(
     () => [
@@ -133,7 +141,7 @@ export default function AgencySeatsPage() {
                 <button
                   key={ent.id}
                   type="button"
-                  onClick={() => setEntitlementId(ent.id)}
+                  onClick={() => { setEntitlementId(ent.id); setSeatPage(1); setSeatSearch(""); }}
                   aria-pressed={active}
                   className={`rounded-3xl p-5 text-left shadow-card ring-1 transition-all ${active ? "bg-white ring-2 ring-brand-700" : "bg-white ring-navy-900/[0.04] hover:ring-navy-300"}`}
                 >
@@ -150,6 +158,7 @@ export default function AgencySeatsPage() {
               );
             })}
           </div>
+          <div className="mt-4"><Pagination page={entPage} pageCount={Math.max(1, Math.ceil((entitlements.data?.total ?? 0) / ENT_PAGE))} onChange={setEntPage} total={entitlements.data?.total ?? 0} pageSize={ENT_PAGE} /></div>
 
           <Panel className="mt-6">
             <PanelHeader
@@ -168,16 +177,21 @@ export default function AgencySeatsPage() {
                 </Button>
               }
             />
+            <div className="mb-4">
+              <label htmlFor="seat-search" className="sr-only">Search assigned seats</label>
+              <Input id="seat-search" type="search" autoComplete="off" placeholder="Search by name or email" value={seatSearch} onChange={(e) => { setSeatSearch(e.target.value); setSeatPage(1); }} />
+            </div>
             <DataTable
               caption="Seat assignments"
               columns={columns}
-              rows={seats.data}
+              rows={seats.data?.items}
               rowKey={(seat) => seat.assignmentId ?? `slot-${seat.slotNo}`}
               loading={seats.isPending}
               error={seats.isError ? (seats.error instanceof Error ? seats.error.message : "Could not load seats.") : undefined}
               onRetry={() => void seats.refetch()}
-              empty={{ title: "No seats assigned", description: "Assign a licensed seat to an active member of your team." }}
+              empty={{ title: seatTerm ? "No seat matches" : "No seats assigned", description: seatTerm ? "Try a different name or email." : "Assign a licensed seat to an active member of your team." }}
             />
+            <div className="mt-4"><Pagination page={seatPage} pageCount={Math.max(1, Math.ceil((seats.data?.total ?? 0) / SEAT_PAGE))} onChange={setSeatPage} total={seats.data?.total ?? 0} pageSize={SEAT_PAGE} /></div>
           </Panel>
         </>
       )}
@@ -204,19 +218,8 @@ export default function AgencySeatsPage() {
         }
       >
         <Field label="Member">
-          {({ id }) => (
-            <Select id={id} data-autofocus value={assignMembership} onChange={(e) => setAssignMembership(e.target.value)}>
-              <option value="">Choose an active member…</option>
-              {activeMembers.map((member) => (
-                <option key={member.membershipId} value={member.membershipId}>
-                  {`${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email} — {member.user.email}
-                </option>
-              ))}
-            </Select>
-          )}
+          {({ id }) => <MemberPicker id={id} value={assignMembership} onChange={(m) => setAssignMembership(m.membershipId)} />}
         </Field>
-        {members.isPending ? <p className="mt-2 text-xs text-ink-600">Loading members…</p> : null}
-        {members.isError ? <p className="mt-2 text-xs text-bad">Could not load members.</p> : null}
       </Modal>
 
       <Modal
@@ -241,18 +244,7 @@ export default function AgencySeatsPage() {
         }
       >
         <Field label="New member">
-          {({ id }) => (
-            <Select id={id} data-autofocus value={reassignMembership} onChange={(e) => setReassignMembership(e.target.value)}>
-              <option value="">Choose an active member…</option>
-              {activeMembers
-                .filter((member) => member.membershipId !== reassignSeat?.membershipId)
-                .map((member) => (
-                  <option key={member.membershipId} value={member.membershipId}>
-                    {`${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email} — {member.user.email}
-                  </option>
-                ))}
-            </Select>
-          )}
+          {({ id }) => <MemberPicker id={id} value={reassignMembership} excludeId={reassignSeat?.membershipId} onChange={(m) => setReassignMembership(m.membershipId)} />}
         </Field>
         <p className="mt-3 flex items-center gap-2 text-xs text-ink-600">
           <Badge tone="warn">Heads up</Badge>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Building2, Plus, Search } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -79,7 +80,7 @@ export default function AdminAgenciesPage() {
         width: "minmax(0,2fr)",
         cell: (a) => (
           <div className="min-w-0">
-            <p className="truncate font-semibold text-ink-900">{a.displayName}</p>
+            <Link href={`/admin/agencies/${a.publicId}`} className="block truncate font-semibold text-ink-900 hover:text-brand-800 hover:underline">{a.displayName}</Link>
             <p className="truncate font-mono text-xs text-ink-600">{a.slug}</p>
           </div>
         ),

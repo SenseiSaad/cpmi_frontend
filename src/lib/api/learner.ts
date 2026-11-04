@@ -33,6 +33,9 @@ export interface LessonSummary {
   progressPercent: number;
   playbackSeconds: number;
   watchedSeconds: number;
+  /** Step-by-step courses: locked until every earlier required lesson is complete. */
+  locked: boolean;
+  lockedReason: string | null;
 }
 
 export interface EnrollmentDetail extends EnrollmentSummary {
@@ -84,6 +87,11 @@ export interface AssessmentOverview {
   bestScorePercent: number | null;
   hasPassed: boolean;
   inProgressAttemptId: string | null;
+  /** True until the lessons (and, for the final exam, the module quizzes) before it are done. */
+  locked: boolean;
+  lockedReason: string | null;
+  /** Tries left, or null when unlimited. */
+  attemptsRemaining: number | null;
 }
 
 export interface AttemptQuestion {

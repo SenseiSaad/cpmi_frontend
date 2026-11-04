@@ -1,4 +1,5 @@
 import {
+  Activity,
   Award,
   BarChart3,
   BookOpen,
@@ -85,9 +86,11 @@ export const PORTALS: Record<Portal, PortalConfig> = {
     nav: [
       { label: "Overview", href: "/admin", icon: LayoutDashboard },
       { label: "Agencies", href: "/admin/agencies", icon: Building2 },
+      { label: "Content studio", href: "/admin/content", icon: BookOpen },
       { label: "Catalog & pricing", href: "/admin/courses", icon: Library },
       { label: "Orders", href: "/admin/orders", icon: Receipt },
       { label: "Reports", href: "/admin/reports", icon: BarChart3 },
+      { label: "System health", href: "/admin/health", icon: Activity },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ],
   },

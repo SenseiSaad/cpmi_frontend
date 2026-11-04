@@ -59,7 +59,11 @@ export function LoginView() {
       subtitle="Sign in with the email address you used to create your account."
       footer={
         <>
-          New here? Accounts are created by invitation — check your email for an invite link, or{" "}
+          New agency?{" "}
+          <Link href="/register" className="font-semibold text-brand-800 underline-offset-4 hover:underline">
+            Register your agency
+          </Link>
+          . Joining a colleague&apos;s agency? Use the invitation link in your email, or{" "}
           <Link href="/#contact" className="font-semibold text-brand-800 underline-offset-4 hover:underline">
             ask your administrator
           </Link>

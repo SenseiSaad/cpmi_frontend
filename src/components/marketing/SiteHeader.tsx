@@ -131,8 +131,8 @@ export default function SiteHeader() {
             >
               Sign in
             </Link>
-            <Link href="/auth/login" className="btn-gold !px-4 !py-2.5 focus-visible:!ring-offset-white sm:!px-5">
-              Get started
+            <Link href="/register" className="btn-gold !px-4 !py-2.5 focus-visible:!ring-offset-white sm:!px-5">
+              Register your agency
             </Link>
             <button
               type="button"

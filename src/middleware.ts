@@ -26,12 +26,12 @@ export function middleware(request: NextRequest) {
   }
 
   // Signed-in users do not need the sign-in screens; /dashboard resolves the right home.
-  if (hasSession && (pathname === "/login" || pathname === "/forgot-password")) {
+  if (hasSession && (pathname === "/login" || pathname === "/forgot-password" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/learner/:path*", "/agency/:path*", "/admin/:path*", "/login", "/forgot-password"],
+  matcher: ["/learner/:path*", "/agency/:path*", "/admin/:path*", "/login", "/forgot-password", "/register"],
 };

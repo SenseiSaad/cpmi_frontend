@@ -66,6 +66,10 @@ export default function LearnerAssessmentsPage() {
           <Badge tone="ok" dot>Passed</Badge>
         ) : row.inProgressAttemptId ? (
           <Badge tone="warn" dot>In progress</Badge>
+        ) : row.locked ? (
+          <span title={row.lockedReason ?? undefined}><Badge tone="neutral">Locked</Badge></span>
+        ) : row.maxAttempts !== null && row.attemptsRemaining === 0 ? (
+          <Badge tone="bad" dot>No tries left</Badge>
         ) : (
           <Badge tone="neutral">Not started</Badge>
         ),
@@ -81,7 +85,7 @@ export default function LearnerAssessmentsPage() {
           variant={row.hasPassed ? "secondary" : "primary"}
           size="sm"
         >
-          {row.hasPassed ? "Review" : row.inProgressAttemptId ? "Resume" : "Start"}
+          {row.hasPassed ? "Review" : row.inProgressAttemptId ? "Resume" : row.locked ? "See why" : "Start"}
         </ButtonLink>
       ),
     },

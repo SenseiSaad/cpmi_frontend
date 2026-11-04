@@ -88,7 +88,7 @@ export function AcceptView() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="You've been invited to join your agency's training portal. Set a password to get started."
+      subtitle="Choose your name and a password to finish setting up your account and open your training portal."
       footer={
         <>
           Already have an account?{" "}
@@ -100,7 +100,7 @@ export function AcceptView() {
     >
       <div className="mb-6 flex items-center gap-3 rounded-2xl bg-navy-900/[0.05] px-4 py-3 text-sm text-ink-700">
         <LinkIcon className="size-4 shrink-0" aria-hidden />
-        <span className="min-w-0">You&apos;re accepting an invitation from your agency administrator.</span>
+        <span className="min-w-0">Your email address is confirmed by opening this link.</span>
         <CheckCircle2 className="ml-auto size-4 shrink-0 text-ok" aria-hidden />
       </div>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">

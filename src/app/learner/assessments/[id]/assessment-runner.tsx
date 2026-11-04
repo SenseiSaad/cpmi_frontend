@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   History,
   Loader2,
+  Lock,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -762,10 +763,23 @@ export function AssessmentRunner({ assessmentId }: { assessmentId: string }) {
             <Link href="/learner/certificates" className={PRIMARY_BTN}>
               <Award size={14} className="text-secondary-400" /> View certificate
             </Link>
+          ) : assessment.locked ? (
+            <div className="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700" role="status">
+              <Lock size={16} className="mt-0.5 shrink-0 text-gray-500" aria-hidden />
+              <div>
+                <p className="font-semibold text-gray-900">Not open yet</p>
+                <p className="mt-0.5">{assessment.lockedReason}</p>
+                {enrollmentRef ? (
+                  <Link href={`/learner/courses/${enrollmentRef}`} className="mt-2 inline-block font-semibold text-primary-800 underline underline-offset-2">
+                    Go to the course
+                  </Link>
+                ) : null}
+              </div>
+            </div>
           ) : maxReached ? (
             <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
-              <p>No attempts remain. Contact your agency administrator if you need another attempt.</p>
+              <p>You have used all your tries. Ask your agency administrator to give you more; they can do this from your learner page, and you will be able to try again straight away.</p>
             </div>
           ) : (
             <button className={PRIMARY_BTN} onClick={() => start.mutate()} disabled={start.isPending}>

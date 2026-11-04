@@ -94,6 +94,7 @@ export interface AgencyReportOverview {
 }
 
 export interface AgencyLearnerReport {
+  membershipId: string;
   learnerName: string;
   email: string;
   membershipStatus: string;
@@ -121,12 +122,6 @@ export const useAgencyReport = (enabled: boolean) =>
     enabled,
   });
 
-export const useAgencyLearnerReport = (enabled: boolean) =>
-  useQuery<{ items: AgencyLearnerReport[] }>({
-    queryKey: ["agency-learners-report"],
-    queryFn: () => http<{ items: AgencyLearnerReport[] }>("GET", `/api/agencies/${requireAgencyId()}/reports/learners`),
-    enabled,
-  });
 
 // ---- Platform extras ----------------------------------------------------------------------
 

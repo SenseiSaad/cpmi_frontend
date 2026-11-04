@@ -142,7 +142,7 @@ export interface CatalogProduct {
   name: string;
   productType: "program" | "module";
   status: ProductStatus;
-  content: { kind: "course" | "module"; title: string; refId?: string } | null;
+  content: { kind: "course" | "module"; title: string; refId?: string; version?: number | null; modules?: number; lessons?: number; hasFinal?: boolean } | null;
   prices: Price[];
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, CheckCircle2, Circle, Clock, FileText, Lock, PlayCircle, Trophy } from "lucide-react";
+import { ArrowLeft, Award, CheckCircle2, Circle, Clock, FileText, Lock, PlayCircle, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,10 +17,14 @@ import { useEnrollment } from "@/lib/api/hooks";
 import {
   getLesson,
   learnerKeys,
+  listAssessments,
   newIdempotencyKey,
   recordProgress,
+  type AssessmentOverview,
   type LessonSummary,
 } from "@/lib/api/learner";
+import { formatDuration } from "@/lib/api/analytics";
+import { LESSON_PROSE, vimeoEmbedUrl } from "@/lib/lesson-prose";
 import { relativeDays } from "@/lib/utils";
 
 interface GroupedModule {
@@ -47,10 +51,107 @@ function groupLessons(lessons: LessonSummary[]): GroupedModule[] {
 }
 
 function LessonIcon({ lesson }: { lesson: LessonSummary }) {
+  if (lesson.locked) return <Lock className="size-4 text-ink-400" aria-hidden />;
   if (lesson.completed) return <CheckCircle2 className="size-4 text-ok" aria-hidden />;
   if (lesson.lessonType === "video") return <PlayCircle className="size-4 text-brand-700" aria-hidden />;
   if (lesson.lessonType === "resource") return <FileText className="size-4 text-info" aria-hidden />;
   return <Circle className="size-4 text-ink-400" aria-hidden />;
+}
+
+type StepState = "done" | "open" | "locked";
+
+/** The route to the certificate, in plain words: lessons, then module quizzes, then the final exam. */
+function CertificatePath({
+  enrollmentId,
+  lessonsDone,
+  lessonsTotal,
+  assessments,
+  completed,
+}: {
+  enrollmentId: string;
+  lessonsDone: number;
+  lessonsTotal: number;
+  assessments: AssessmentOverview[] | undefined;
+  completed: boolean;
+}) {
+  const quizzes = (assessments ?? []).filter((a) => a.kind === "module");
+  const final = (assessments ?? []).find((a) => a.kind === "final");
+  const quizzesPassed = quizzes.filter((q) => q.hasPassed).length;
+  const lessonsComplete = lessonsTotal > 0 && lessonsDone >= lessonsTotal;
+  const quizzesComplete = quizzes.length === 0 || quizzesPassed === quizzes.length;
+
+  const steps: { key: string; title: string; detail: string; state: StepState; href?: string; cta?: string }[] = [
+    {
+      key: "lessons",
+      title: "Finish the lessons",
+      detail: `${lessonsDone} of ${lessonsTotal} lessons complete`,
+      state: completed || lessonsComplete ? "done" : "open",
+    },
+  ];
+  if (quizzes.length > 0) {
+    steps.push({
+      key: "quizzes",
+      title: "Pass the module quizzes",
+      detail: `${quizzesPassed} of ${quizzes.length} passed`,
+      state: completed || quizzesComplete ? "done" : lessonsDone > 0 ? "open" : "locked",
+      href: `/learner/assessments?enrollment=${enrollmentId}`,
+      cta: "Open quizzes",
+    });
+  }
+  if (final) {
+    steps.push({
+      key: "final",
+      title: "Pass the final exam",
+      detail: final.hasPassed
+        ? "Passed"
+        : final.locked
+          ? (final.lockedReason ?? "Opens when the earlier steps are done.")
+          : final.attemptsRemaining === 0
+            ? "No tries left. Ask your agency administrator for more."
+            : final.maxAttempts === null
+              ? "Ready when you are"
+              : `Ready. ${final.attemptsRemaining} of ${final.maxAttempts} tries left`,
+      state: final.hasPassed ? "done" : final.locked ? "locked" : "open",
+      href: `/learner/assessments/${final.assessmentPublicId}?enrollment=${enrollmentId}`,
+      cta: final.inProgressAttemptId ? "Resume exam" : "Open exam",
+    });
+  }
+  steps.push({
+    key: "certificate",
+    title: "Receive your certificate",
+    detail: completed ? "Earned. Find it under Certificates." : "Issued automatically when every step above is done.",
+    state: completed ? "done" : "locked",
+    href: completed ? "/learner/certificates" : undefined,
+    cta: "View certificate",
+  });
+
+  return (
+    <Panel className="mt-6">
+      <PanelHeader title="Your path to the certificate" description="Your certificate is issued after you finish every module and pass the final exam." />
+      <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {steps.map((s, i) => (
+          <li
+            key={s.key}
+            className={`rounded-2xl p-4 ring-1 ${s.state === "done" ? "bg-ok-bg/60 ring-ok/30" : s.state === "open" ? "bg-white ring-2 ring-brand-700" : "bg-canvas-soft ring-line"}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`grid size-7 place-items-center rounded-full text-xs font-bold ${s.state === "done" ? "bg-ok text-white" : s.state === "open" ? "bg-brand-700 text-white" : "bg-line text-ink-600"}`}>
+                {s.state === "done" ? <CheckCircle2 className="size-4" aria-hidden /> : s.state === "locked" ? <Lock className="size-3.5" aria-hidden /> : i + 1}
+              </span>
+              <p className="text-sm font-bold text-ink-900">{s.title}</p>
+            </div>
+            <p className="mt-2 text-sm text-ink-700">{s.detail}</p>
+            {s.href && s.state !== "locked" ? (
+              <Link href={s.href} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-800 underline-offset-4 hover:underline">
+                {s.key === "certificate" ? <Award className="size-4" aria-hidden /> : null}
+                {s.cta}
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
 }
 
 function LessonDrawer({
@@ -127,18 +228,27 @@ function LessonDrawer({
       ) : (
         <div className="space-y-5">
           {content.data?.lesson.video ? (
-            <div className="rounded-2xl bg-navy-900 p-6 text-center text-white">
-              <PlayCircle className="mx-auto size-10 text-brand-200" aria-hidden />
-              <p className="mt-2 text-sm font-semibold">Video lesson</p>
-              <p className="mt-1 text-xs text-white/70">
-                {content.data.lesson.video.provider} asset {content.data.lesson.video.assetId}
-              </p>
-            </div>
+            content.data.lesson.video.provider === "vimeo" && /^\d{4,15}$/.test(content.data.lesson.video.assetId) ? (
+              <div className="aspect-video overflow-hidden rounded-2xl bg-navy-950">
+                <iframe
+                  title={content.data.lesson.title}
+                  src={vimeoEmbedUrl(content.data.lesson.video.assetId)}
+                  className="size-full"
+                  allow="fullscreen; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-navy-900 p-6 text-center text-white">
+                <PlayCircle className="mx-auto size-10 text-brand-200" aria-hidden />
+                <p className="mt-2 text-sm font-semibold">Video lesson</p>
+              </div>
+            )
           ) : null}
 
           {content.data?.lesson.bodyHtml ? (
             <article
-              className="space-y-3 text-sm leading-relaxed text-ink-700 [&_a]:text-brand-700 [&_a]:underline [&_h1]:text-xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:font-bold [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:pl-5"
+              className={LESSON_PROSE}
               // Sanitized server-side before it reaches the client.
               dangerouslySetInnerHTML={{ __html: content.data.lesson.bodyHtml }}
             />
@@ -174,6 +284,12 @@ function LessonDrawer({
 export default function LearnerCoursePage({ params }: { params: { id: string } }) {
   const enrollment = useEnrollment(params.id);
   const [selected, setSelected] = useState<LessonSummary | null>(null);
+  const assessments = useQuery({
+    queryKey: learnerKeys.assessments(params.id),
+    queryFn: () => listAssessments(params.id),
+    // A completed enrollment has no open assessments; the path then shows everything as done.
+    retry: false,
+  });
 
   if (enrollment.isError) {
     return (
@@ -200,6 +316,10 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
   const modules = groupLessons(data.lessons);
   const total = data.lessons.length;
   const done = data.lessons.filter((lesson) => lesson.completed).length;
+  // Course time is the planned length of the lessons (reading lessons have no stopwatch), so it is an estimate.
+  const minutesOf = (list: LessonSummary[]) => list.reduce((n, l) => n + (l.durationMinutes ?? 0), 0);
+  const totalMinutes = minutesOf(data.lessons);
+  const doneMinutes = minutesOf(data.lessons.filter((l) => l.completed));
 
   return (
     <>
@@ -226,6 +346,7 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
               </div>
               <p className="mt-2 text-sm text-ink-600">
                 <span className="tnum font-semibold text-ink-900">{done}</span> of <span className="tnum font-semibold text-ink-900">{total}</span> lessons complete
+                {totalMinutes > 0 ? ` · about ${formatDuration(doneMinutes * 60)} of ${formatDuration(totalMinutes * 60)} learned` : ""}
                 {data.due_at ? ` · due ${new Date(data.due_at).toLocaleDateString()}` : ""}
               </p>
               <ProgressBar value={data.progress_percent} label="Course progress" className="mt-3" />
@@ -255,18 +376,28 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
         </Panel>
       </div>
 
+      <CertificatePath
+        enrollmentId={data.uuid}
+        lessonsDone={done}
+        lessonsTotal={total}
+        assessments={assessments.data}
+        completed={data.status === "completed"}
+      />
+
       <div className="mt-6 space-y-4">
         {modules.length === 0 ? (
           <Panel><p className="py-8 text-center text-sm text-ink-600">Lessons are being prepared for this course.</p></Panel>
         ) : (
           modules.map((module) => {
             const moduleDone = module.lessons.filter((lesson) => lesson.completed).length;
+            const moduleMinutes = minutesOf(module.lessons);
             return (
               <Panel key={module.position}>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Module {module.position}</p>
                     <h2 className="text-base font-bold text-ink-900">{module.title}</h2>
+                    {moduleMinutes > 0 ? <p className="text-xs text-ink-600">About {formatDuration(moduleMinutes * 60)} · {Math.round((moduleDone / Math.max(1, module.lessons.length)) * 100)}% done</p> : null}
                   </div>
                   <Badge tone={moduleDone === module.lessons.length ? "ok" : "neutral"}>{moduleDone}/{module.lessons.length} complete</Badge>
                 </div>
@@ -276,7 +407,9 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
                       <button
                         type="button"
                         onClick={() => setSelected(lesson)}
-                        className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:text-brand-800"
+                        disabled={lesson.locked}
+                        title={lesson.lockedReason ?? undefined}
+                        className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:text-brand-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-ink-900"
                       >
                         <LessonIcon lesson={lesson} />
                         <div className="min-w-0 flex-1">
@@ -285,6 +418,7 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
                             {lesson.lessonType} · {lesson.durationMinutes ? `${lesson.durationMinutes} min` : "self-paced"}
                             {lesson.progressPercent > 0 && !lesson.completed ? ` · ${Math.round(lesson.progressPercent)}% watched` : ""}
                           </p>
+                          {lesson.locked ? <p className="text-xs text-ink-600">{lesson.lockedReason}</p> : null}
                         </div>
                         {lesson.completed ? <CheckCircle2 className="size-4 text-ok" aria-hidden /> : <Clock className="size-4 text-ink-400" aria-hidden />}
                       </button>

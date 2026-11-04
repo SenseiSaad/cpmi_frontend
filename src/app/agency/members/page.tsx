@@ -1,6 +1,7 @@
 "use client";
 
 import { Search, UserCog, UserPlus, Users } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { BulkInviteDialog, InviteDialog } from "@/components/agency/invite-dialogs";
@@ -59,7 +60,7 @@ export default function AgencyMembersPage() {
               {initials(m.user.firstName, m.user.lastName)}
             </span>
             <div className="min-w-0">
-              <p className="truncate font-semibold text-ink-900">{memberName(m)}</p>
+              <Link href={`/agency/members/${m.membershipId}`} className="block truncate font-semibold text-ink-900 hover:text-brand-800 hover:underline">{memberName(m)}</Link>
               <p className="truncate font-mono text-xs text-ink-600">{m.user.email}</p>
             </div>
           </div>

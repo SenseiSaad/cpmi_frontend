@@ -15,8 +15,8 @@ export default function CtaBand() {
           </p>
         </Reveal>
         <Reveal delay={0.08} className="flex flex-wrap gap-3 lg:col-span-5 lg:justify-end">
-          <Link href="/auth/login" className="btn-ink">
-            Start training <ArrowRight size={17} aria-hidden />
+          <Link href="/register" className="btn-ink">
+            Register your agency <ArrowRight size={17} aria-hidden />
           </Link>
           <Link
             href="#procurement"

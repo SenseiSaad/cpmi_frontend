@@ -40,8 +40,8 @@ export default function Hero() {
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link href="/auth/login" className="btn-gold">
-                Get started <ArrowRight size={17} aria-hidden />
+              <Link href="/register" className="btn-gold">
+                Register your agency <ArrowRight size={17} aria-hidden />
               </Link>
               <Link href="#curriculum" className="btn-line-light">
                 Explore the curriculum

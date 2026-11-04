@@ -35,7 +35,7 @@ import { http } from "./client";
 import { ApiClientError } from "./error";
 import { getSessionUser, mapBackendUser, requireAgencyId, setSessionUser, type BackendUser } from "./session-store";
 
-interface BackendPage {
+export interface BackendPage {
   total: number;
   limit?: number;
   offset?: number;
@@ -47,7 +47,7 @@ const asRecord = (v: unknown): Record<string, any> => (v && typeof v === "object
 const asArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 const bestEffortNumber = (v: unknown, fallback = 0): number => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
 
-function toPage<T>(items: T[], raw: BackendPage): Page<T> {
+export function toPage<T>(items: T[], raw: BackendPage): Page<T> {
   const limit = raw.limit ?? raw.pageSize ?? items.length;
   const offset = raw.offset ?? ((raw.page ?? 1) - 1) * limit;
   return { items, total: raw.total ?? items.length, limit, offset };
@@ -65,7 +65,7 @@ function mapPrice(raw: any) {
   };
 }
 
-function mapOrder(raw: any): Order {
+export function mapOrder(raw: any): Order {
   return {
     publicId: raw.publicId,
     status: raw.status,
@@ -90,7 +90,7 @@ function mapOrder(raw: any): Order {
   };
 }
 
-function mapMember(raw: any): MemberRow {
+export function mapMember(raw: any): MemberRow {
   return {
     membershipId: String(raw.membershipId),
     membershipStatus: raw.membershipStatus,
@@ -110,7 +110,7 @@ function mapMember(raw: any): MemberRow {
   };
 }
 
-function mapEntitlement(raw: any): Entitlement {
+export function mapEntitlement(raw: any): Entitlement {
   return {
     id: String(raw.id),
     productName: raw.productName,
@@ -122,7 +122,7 @@ function mapEntitlement(raw: any): Entitlement {
   };
 }
 
-function mapSeat(raw: any, index: number): Seat {
+export function mapSeat(raw: any, index: number): Seat {
   const learner = raw.learner ?? raw.member;
   return {
     assignmentId: raw.assignmentId != null ? String(raw.assignmentId) : raw.uuid != null ? String(raw.uuid) : null,
@@ -139,7 +139,7 @@ function mapSeat(raw: any, index: number): Seat {
   };
 }
 
-function mapStoreProduct(raw: any): StoreProduct {
+export function mapStoreProduct(raw: any): StoreProduct {
   return {
     publicId: raw.publicId,
     code: raw.code ?? "",
@@ -151,7 +151,7 @@ function mapStoreProduct(raw: any): StoreProduct {
   };
 }
 
-function mapCatalogProduct(raw: any): CatalogProduct {
+export function mapCatalogProduct(raw: any): CatalogProduct {
   const content = raw.content ?? null;
   return {
     publicId: raw.publicId,
@@ -477,26 +477,13 @@ export const liveApi = {
       await http("PATCH", `/api/platform/agencies/${publicId}`, { status });
     },
     async allOrders(q: { limit?: number; offset?: number; status?: string } = {}): Promise<Page<Order>> {
-      // There is no platform-wide orders endpoint; aggregate the first page of agencies.
+      // One server-side page of every order on the platform.
       const limit = q.limit ?? 10;
       const offset = q.offset ?? 0;
-      const agenciesRaw = await http<any>("GET", "/api/platform/agencies", undefined, { query: { page: 1, pageSize: 50 } });
-      const agencies = asArray<any>(agenciesRaw.items ?? agenciesRaw.agencies);
-      const results = await Promise.all(
-        agencies.map(async (a) => {
-          try {
-            const raw = await http<{ orders: any[] }>("GET", `/api/agencies/${a.uuid ?? a.publicId}/orders`, undefined, {
-              query: { limit: 100, offset: 0 },
-            });
-            return asArray<any>(raw.orders).map((o) => mapOrder({ ...o, agencyName: a.name ?? a.displayName }));
-          } catch {
-            return [];
-          }
-        }),
-      );
-      let all = results.flat().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-      if (q.status && q.status !== "all") all = all.filter((o) => o.status === q.status);
-      return toPage(all.slice(offset, offset + limit), { total: all.length, limit, offset });
+      const raw = await http<{ orders: any[]; page: BackendPage }>("GET", "/api/platform/orders", undefined, {
+        query: { limit, offset, status: q.status && q.status !== "all" ? q.status : undefined },
+      });
+      return toPage(asArray<any>(raw.orders).map(mapOrder), { ...raw.page, limit, offset });
     },
     async entitlementStatus(entitlementId: string, action: "suspend" | "reactivate" | "revoke", note: string): Promise<void> {
       const status = action === "suspend" ? "suspended" : action === "reactivate" ? "active" : "revoked";
