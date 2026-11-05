@@ -61,13 +61,6 @@ function formatDateTime(iso: string | null): string {
   });
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 const TYPE_LABEL: Record<AttemptQuestion["questionType"], string> = {
   single_choice: "Single choice",
   multiple_choice: "Multiple choice",
@@ -734,10 +727,18 @@ export function AssessmentRunner({ assessmentId }: { assessmentId: string }) {
             </div>
             <h2 className="mt-3 text-xl font-black leading-snug text-gray-900 sm:text-2xl">{assessment.title}</h2>
             <p className="mt-1 text-xs text-gray-500 sm:text-sm">
-              Available from {formatDate(assessment.availableFrom)}. Attempts and scoring are tracked by the server.
+              You need {Math.round(assessment.passingScore)}% to pass. Your best score is the one that counts, and answers are saved as you go.
             </p>
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-3">
+          <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Pass mark</p>
+              <p className="tnum mt-0.5 text-xl font-black text-primary-900">{Math.round(assessment.passingScore)}%</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Questions</p>
+              <p className="tnum mt-0.5 text-xl font-black text-primary-900">{assessment.questionCount}</p>
+            </div>
             <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Best score</p>
               <p className="tnum mt-0.5 text-xl font-black text-primary-900">
@@ -801,7 +802,7 @@ export function AssessmentRunner({ assessmentId }: { assessmentId: string }) {
         {[
           { icon: ShieldCheck, title: "Server-graded", body: "Answers are scored by the API, never in your browser." },
           { icon: Save, title: "Save as you go", body: "Use Save progress before leaving; an open attempt can be resumed." },
-          { icon: Award, title: "Certificates", body: "Passing a required assessment can unlock a certificate automatically." },
+          { icon: Award, title: "Your certificate", body: "It is issued automatically once you have finished every lesson and passed every quiz and the final exam." },
         ].map((fact) => (
           <div key={fact.title} className="rounded-3xl border border-gray-200/90 bg-white p-5 shadow-xs">
             <fact.icon className="size-5 text-highlight-600" aria-hidden />

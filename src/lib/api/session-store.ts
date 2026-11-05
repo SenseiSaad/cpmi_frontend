@@ -17,6 +17,7 @@ interface BackendAgency {
   slug: string;
   name: string;
   role: string;
+  logoUrl?: string | null;
 }
 
 export interface BackendUser {
@@ -24,6 +25,7 @@ export interface BackendUser {
   email: string;
   firstName: string;
   lastName: string;
+  avatarUrl?: string | null;
   roles: BackendRoleGrant[];
   agencies?: BackendAgency[];
 }
@@ -35,7 +37,7 @@ export function mapBackendUser(raw: BackendUser): SessionUser {
   const roles = (raw.roles ?? []).map((grant) => grant.roleCode as RoleCode);
   const role: RoleCode = ROLE_PRIORITY.find((r) => roles.includes(r)) ?? "learner";
   const first = raw.agencies?.[0];
-  const agency: AgencyRef | null = first ? { publicId: first.uuid, displayName: first.name, slug: first.slug } : null;
+  const agency: AgencyRef | null = first ? { publicId: first.uuid, displayName: first.name, slug: first.slug, logoUrl: first.logoUrl ?? null } : null;
   const titleFallback = role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return {
     userPublicId: raw.userPublicId,
@@ -45,6 +47,7 @@ export function mapBackendUser(raw: BackendUser): SessionUser {
     role,
     title: titleFallback,
     agency,
+    avatarUrl: raw.avatarUrl ?? null,
   };
 }
 

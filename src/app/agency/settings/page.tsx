@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { AgencyLogoEditor, MyPicture } from "@/components/people/my-picture";
 import { Badge, StatusPill } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Panel, PanelHeader } from "@/components/ui/panel";
@@ -48,6 +49,17 @@ export default function AgencySettingsPage() {
         subtitle="Agency identity, seat entitlements and billing."
         actions={<Button variant="secondary" icon={<LogOut className="size-4" aria-hidden />} onClick={() => void handleSignOut()}>Sign out</Button>}
       />
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Agency logo" description="Shown beside your agency's name everywhere it appears." />
+          <AgencyLogoEditor />
+        </Panel>
+        <Panel>
+          <PanelHeader title="Your picture" description="Shown beside your name." />
+          <MyPicture />
+        </Panel>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel>

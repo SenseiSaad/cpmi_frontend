@@ -342,7 +342,7 @@ export default function LearnerCoursePage({ params }: { params: { id: string } }
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={data.status === "completed" ? "ok" : data.readOnly ? "warn" : "brand"} dot>{data.status.replace(/_/g, " ")}</Badge>
-                {data.readOnly ? <Badge tone="warn" dot>Read only</Badge> : null}
+                {data.readOnly ? <Badge tone="info" dot>{data.status === "completed" ? "Finished - review only" : "Read only"}</Badge> : null}
               </div>
               <p className="mt-2 text-sm text-ink-600">
                 <span className="tnum font-semibold text-ink-900">{done}</span> of <span className="tnum font-semibold text-ink-900">{total}</span> lessons complete

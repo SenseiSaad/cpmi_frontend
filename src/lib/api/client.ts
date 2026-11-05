@@ -107,6 +107,8 @@ export interface HttpOptions {
   signal?: AbortSignal;
   /** Send this text verbatim (e.g. a CSV upload) instead of a JSON-encoded body. */
   rawBody?: { text: string; contentType: string };
+  /** Send a file (picture upload) as the raw request body. */
+  binaryBody?: { blob: Blob; contentType: string };
 }
 
 /** Performs one API call and returns the parsed JSON body (or undefined for 204). */
@@ -119,6 +121,7 @@ export async function http<T>(method: HttpMethod, path: string, body?: unknown, 
       ...options.headers,
     };
     if (options.rawBody) headers["Content-Type"] = options.rawBody.contentType;
+    else if (options.binaryBody) headers["Content-Type"] = options.binaryBody.contentType;
     else if (body !== undefined) headers["Content-Type"] = "application/json";
     if (mutating) {
       const token = retriedCsrf ? await fetchCsrfToken(true) : csrfToken ?? (await fetchCsrfToken());
@@ -132,6 +135,7 @@ export async function http<T>(method: HttpMethod, path: string, body?: unknown, 
       signal: options.signal,
     };
     if (options.rawBody) init.body = options.rawBody.text;
+    else if (options.binaryBody) init.body = options.binaryBody.blob;
     else if (body !== undefined) init.body = JSON.stringify(body);
     return fetch(buildUrl(path, options.query), init);
   };

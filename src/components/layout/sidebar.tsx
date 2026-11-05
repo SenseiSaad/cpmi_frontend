@@ -87,7 +87,7 @@ export function SidebarContent({ portal, onNavigate }: { portal: Portal; onNavig
         <div className="rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
           {ready && user ? (
             <div className="flex items-center gap-3">
-              <Avatar first={user.firstName} last={user.lastName} size="md" online />
+              <Avatar first={user.firstName} last={user.lastName} size="md" online src={user.avatarUrl} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-white">
                   {user.firstName} {user.lastName}

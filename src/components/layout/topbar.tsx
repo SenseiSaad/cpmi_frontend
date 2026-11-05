@@ -190,7 +190,7 @@ function UserMenu({ portal }: { portal: Portal }) {
       triggerClassName="!size-auto !rounded-full !p-0 hover:!bg-transparent"
       trigger={
         <span className="flex items-center gap-2.5 rounded-full bg-white py-1 pl-1 pr-4 shadow-card ring-1 ring-navy-900/[0.05]">
-          <Avatar first={user.firstName} last={user.lastName} size="sm" online />
+          <Avatar first={user.firstName} last={user.lastName} size="sm" online src={user.avatarUrl} />
           <span className="hidden text-left sm:block">
             <span className="block text-sm font-bold leading-tight text-ink-900">
               {user.firstName} {user.lastName}

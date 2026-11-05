@@ -4,6 +4,8 @@ import { Award, BookOpen, Check, Mail, Save, ShieldCheck, UserRound } from "luci
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { MyPicture } from "@/components/people/my-picture";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { Skeleton } from "@/components/ui/states";
@@ -11,7 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import { useEnrollments, useLearnerCertificates, useProfile, useUpdateProfile } from "@/lib/api/hooks";
 import { ROLE_LABEL } from "@/lib/api/fixtures";
 import { useSession } from "@/lib/auth/session";
-import { formatNumber, initials } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 
 const INPUT_CLASS =
   "w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:ring-offset-0";
@@ -64,7 +66,6 @@ export default function ProfilePage() {
   }
 
   const user = session.user;
-  const initialsText = initials(firstName || user?.firstName || "", lastName || user?.lastName || "");
   const certificateCount = certificates.data?.length ?? 0;
   const enrollmentCount = enrollments.data?.length ?? 0;
 
@@ -104,12 +105,7 @@ export default function ProfilePage() {
             {/* User Card (Zed design) */}
             <div className="flex flex-col items-start justify-between gap-6 rounded-3xl border border-gray-200/90 bg-white p-6 shadow-xs sm:flex-row sm:items-center sm:p-8">
               <div className="flex items-center gap-5">
-                <div
-                  className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#152A13] text-2xl font-black text-secondary-400 shadow-xs"
-                  aria-hidden
-                >
-                  {initialsText}
-                </div>
+                <Avatar first={firstName || user?.firstName || ""} last={lastName || user?.lastName || ""} size="lg" src={user?.avatarUrl} />
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-black text-gray-900">
@@ -144,6 +140,10 @@ export default function ProfilePage() {
                   <span className="text-[10px] font-medium text-gray-400">Loading…</span>
                 ) : null}
               </div>
+            </div>
+
+            <div className="rounded-3xl border border-gray-200/90 bg-white p-6 shadow-xs sm:p-8">
+              <MyPicture />
             </div>
 
             {/* Profile Information Form (Zed design) */}

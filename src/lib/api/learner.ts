@@ -81,6 +81,10 @@ export interface AssessmentOverview {
   assessmentPublicId: string;
   kind: "module" | "final";
   title: string;
+  /** Score needed to pass, in percent. */
+  passingScore: number;
+  /** Questions in one attempt. */
+  questionCount: number;
   availableFrom: string;
   attemptsUsed: number;
   maxAttempts: number | null;

@@ -4,6 +4,7 @@ import { Database, Globe2, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { MyPicture } from "@/components/people/my-picture";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelHeader } from "@/components/ui/panel";
@@ -68,6 +69,11 @@ export default function AdminSettingsPage() {
           />
         </Panel>
       </div>
+
+      <Panel className="mt-6">
+        <PanelHeader title="Your picture" description="Shown beside your name across the platform." />
+        <MyPicture />
+      </Panel>
 
       <Panel className="mt-6">
         <PanelHeader title="Service health" description="Live queue snapshot from the backend observability endpoint." action={<ShieldCheck className="size-5 text-ok" aria-hidden />} />

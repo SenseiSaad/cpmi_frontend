@@ -102,6 +102,7 @@ export function mapMember(raw: any): MemberRow {
       firstName: raw.user?.firstName ?? "",
       lastName: raw.user?.lastName ?? "",
       status: raw.user?.status ?? "active",
+      avatarUrl: raw.user?.avatarUrl ?? null,
     },
     roles: (raw.roles ?? []) as RoleCode[],
     // Learner progress is not part of the member list API yet.
@@ -183,6 +184,7 @@ function mapAgencySummary(raw: any): AgencySummary {
     seatCapacity: bestEffortNumber(raw.seatCapacity),
     createdAt: raw.createdAt ?? raw.created_at ?? "",
     state: raw.state ?? "—",
+    logoUrl: raw.logoUrl ?? raw.logo_url ?? null,
   };
 }
 

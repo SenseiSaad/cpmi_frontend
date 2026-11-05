@@ -28,6 +28,7 @@ export interface AgencyProfile {
   slug: string;
   status: string;
   billingEmail: string | null;
+  logoUrl?: string | null;
   createdAt: string;
   admins: { name: string; email: string; status: string }[];
   members: number;
@@ -141,7 +142,7 @@ export interface LearnerDetail {
     membershipStatus: string;
     employeeReference: string | null;
     joinedAt: string | null;
-    user: { publicId: string; email: string; firstName: string; lastName: string; status: string };
+    user: { publicId: string; email: string; firstName: string; lastName: string; status: string; avatarUrl?: string | null };
     roles: string[];
   };
   enrollments: LearnerEnrollment[];

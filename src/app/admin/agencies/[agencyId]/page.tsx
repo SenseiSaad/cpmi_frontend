@@ -5,6 +5,8 @@ import { Award, Building2, ChevronLeft, GraduationCap, Mail, Percent, Ticket, Us
 import Link from "next/link";
 import { useState } from "react";
 
+import { AgencyLogoEditor } from "@/components/people/my-picture";
+import { AgencyMark } from "@/components/ui/avatar";
 import { Badge, StatusPill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -240,7 +242,7 @@ export default function AdminAgencyDetailPage({ params }: { params: { agencyId: 
       {back}
       <header className="mb-6 rounded-3xl bg-white p-5 shadow-card ring-1 ring-navy-900/[0.04]">
         <div className="flex flex-wrap items-start gap-4">
-          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-navy-900 text-brand-200" aria-hidden><Building2 className="size-6" /></span>
+          <AgencyMark name={a.name} src={a.logoUrl} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-2xl font-extrabold tracking-tight text-navy-900">{a.name}</h1>
@@ -259,6 +261,9 @@ export default function AdminAgencyDetailPage({ params }: { params: { agencyId: 
           ) : null}
         </div>
       </header>
+      <Panel className="mb-6">
+        <AgencyLogoEditor agencyId={a.uuid} name={a.name} logoUrl={a.logoUrl} />
+      </Panel>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Learners" value={formatNumber(a.learners)} hint={`${formatNumber(a.activeMembers)} active of ${formatNumber(a.members)} people`} icon={Users} />

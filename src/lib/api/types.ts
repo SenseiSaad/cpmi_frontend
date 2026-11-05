@@ -11,6 +11,8 @@ export interface AgencyRef {
   publicId: string;
   displayName: string;
   slug: string;
+  /** The agency's logo, or null/undefined to show initials. */
+  logoUrl?: string | null;
 }
 
 /** What GET /auth/me should return (the backend currently omits the agency name/public id: gap). */
@@ -22,6 +24,8 @@ export interface SessionUser {
   role: RoleCode;
   title: string;
   agency: AgencyRef | null;
+  /** The person's own picture, or null/undefined to show initials. */
+  avatarUrl?: string | null;
 }
 
 export type MembershipStatus = "invited" | "active" | "suspended" | "left";
@@ -31,7 +35,7 @@ export interface MemberRow {
   membershipStatus: MembershipStatus;
   employeeReference: string | null;
   joinedAt: string | null;
-  user: { publicId: string; email: string; firstName: string; lastName: string; status: string };
+  user: { publicId: string; email: string; firstName: string; lastName: string; status: string; avatarUrl?: string | null };
   roles: RoleCode[];
   /** PREVIEW: learner progress is not in the API yet. */
   progress: number;
@@ -132,6 +136,7 @@ export interface AgencySummary {
   seatCapacity: number;
   createdAt: string;
   state: string;
+  logoUrl?: string | null;
 }
 
 export type ProductStatus = "draft" | "active" | "retired";

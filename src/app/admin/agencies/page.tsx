@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { AgencyMark } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -79,9 +80,12 @@ export default function AdminAgenciesPage() {
         header: "Agency",
         width: "minmax(0,2fr)",
         cell: (a) => (
-          <div className="min-w-0">
-            <Link href={`/admin/agencies/${a.publicId}`} className="block truncate font-semibold text-ink-900 hover:text-brand-800 hover:underline">{a.displayName}</Link>
-            <p className="truncate font-mono text-xs text-ink-600">{a.slug}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <AgencyMark name={a.displayName} src={a.logoUrl} size="sm" />
+            <div className="min-w-0">
+              <Link href={`/admin/agencies/${a.publicId}`} className="block truncate font-semibold text-ink-900 hover:text-brand-800 hover:underline">{a.displayName}</Link>
+              <p className="truncate font-mono text-xs text-ink-600">{a.slug}</p>
+            </div>
           </div>
         ),
       },

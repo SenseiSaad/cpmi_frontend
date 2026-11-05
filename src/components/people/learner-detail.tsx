@@ -5,6 +5,7 @@ import { AlertCircle, Award, CheckCircle2, ChevronLeft, Clock, GraduationCap, Lo
 import Link from "next/link";
 import { useState } from "react";
 
+import { Avatar } from "@/components/ui/avatar";
 import { Badge, StatusPill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/field";
@@ -17,7 +18,6 @@ import { grantExtraAttempts, setMemberStatus, useLearnerDetail, type LearnerAsse
 import { cn } from "@/lib/utils";
 
 const date = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
-const initials = (first: string, last: string) => `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase() || "?";
 const ENROLLMENT_LABEL: Record<string, string> = { assigned: "Not started", in_progress: "In progress", completed: "Completed", expired: "Expired", withdrawn: "Withdrawn" };
 
 /** What a person looking at an assessment needs to know first, in a few words. */
@@ -304,7 +304,7 @@ export function LearnerDetailView({ agencyId, membershipId, backHref, backLabel,
     <>
       {back}
       <header className="mb-6 flex flex-wrap items-center gap-4 rounded-3xl bg-white p-5 shadow-card ring-1 ring-navy-900/[0.04]">
-        <span className="grid size-14 shrink-0 place-items-center rounded-full bg-navy-900 text-lg font-bold text-brand-200" aria-hidden>{initials(member.user.firstName, member.user.lastName)}</span>
+        <Avatar first={member.user.firstName} last={member.user.lastName} size="lg" src={member.user.avatarUrl} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate text-2xl font-extrabold tracking-tight text-navy-900">{fullName}</h1>

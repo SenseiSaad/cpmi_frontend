@@ -17,7 +17,8 @@ import { Tabs } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useAction, useMembers } from "@/lib/api/hooks";
 import type { MemberRow } from "@/lib/api/types";
-import { initials, relativeDays } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
+import { relativeDays } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 type StatusFilter = "all" | "active" | "invited" | "suspended" | "left";
@@ -56,9 +57,7 @@ export default function AgencyMembersPage() {
         width: "minmax(0,2fr)",
         cell: (m) => (
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-navy-900 text-xs font-bold text-brand-200" aria-hidden>
-              {initials(m.user.firstName, m.user.lastName)}
-            </span>
+            <Avatar first={m.user.firstName} last={m.user.lastName} size="sm" src={m.user.avatarUrl} />
             <div className="min-w-0">
               <Link href={`/agency/members/${m.membershipId}`} className="block truncate font-semibold text-ink-900 hover:text-brand-800 hover:underline">{memberName(m)}</Link>
               <p className="truncate font-mono text-xs text-ink-600">{m.user.email}</p>
