@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 export default function VerifyPage({
   searchParams,
 }: {
-  searchParams?: { token?: string | string[] };
+  searchParams?: { token?: string | string[]; number?: string | string[] };
 }) {
-  const raw = searchParams?.token;
+  const raw = searchParams?.token ?? searchParams?.number;
   const token = Array.isArray(raw) ? raw[0] ?? null : raw ?? null;
   return <VerifyZed token={token} />;
 }

@@ -1,15 +1,16 @@
 "use client";
 
-import { Award, CheckCircle2, ClipboardCheck, Clock, Lock, PlayCircle, RotateCcw, Target, TriangleAlert } from "lucide-react";
+import { ArrowRight, Award, CheckCircle2, ChevronDown, ClipboardCheck, Clock, Lock, PlayCircle, RotateCcw, Target, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { ProgressBar } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { useAllAssessments, useEnrollments } from "@/lib/api/hooks";
@@ -106,6 +107,8 @@ export default function LearnerAssessmentsPage() {
   const enrollments = useEnrollments();
   const assessments = useAllAssessments(enrollments.data);
 
+  const [filter, setFilter] = useState<"todo" | "passed" | "all">("todo");
+
   const rows = useMemo(
     () => (assessments.data ?? []).filter((row) => !enrollmentFilter || row.enrollment.uuid === enrollmentFilter),
     [assessments.data, enrollmentFilter],
@@ -120,6 +123,12 @@ export default function LearnerAssessmentsPage() {
     }
     return [...groups.values()].map((g) => ({ ...g, items: sortAssessments(g.items) }));
   }, [rows]);
+
+  /** What to do next: finish what is open, else the first quiz or exam that is ready. */
+  const next = useMemo(() => {
+    const all = byCourse.flatMap((g) => g.items);
+    return all.find((a) => standingOf(a) === "in_progress") ?? all.find((a) => standingOf(a) === "ready") ?? null;
+  }, [byCourse]);
 
   const totals = useMemo(() => {
     const t = { all: rows.length, passed: 0, inProgress: 0, needHelp: 0 };
@@ -191,25 +200,75 @@ export default function LearnerAssessmentsPage() {
             <StatCard label="Need help" value={totals.needHelp} hint={totals.needHelp ? "Out of tries - ask your administrator" : "You still have tries on everything"} icon={TriangleAlert} tone={totals.needHelp ? "warn" : "info"} />
           </div>
 
-          {byCourse.map(({ enrollment, items }) => {
-            const passed = items.filter((i) => i.hasPassed).length;
+          {next ? (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-navy-900 p-5 text-white shadow-card">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-200">{standingOf(next) === "in_progress" ? "Pick up where you left off" : "Up next"}</p>
+                <p className="mt-1 truncate text-lg font-extrabold">{next.title}</p>
+                <p className="truncate text-sm text-navy-200">{next.enrollment.course.title}</p>
+              </div>
+              <ButtonLink href={`/learner/assessments/${next.assessmentPublicId}?enrollment=${next.enrollment.uuid}`} variant="primary" icon={<ArrowRight className="size-4" aria-hidden />}>
+                {standingOf(next) === "in_progress" ? "Resume" : "Start"}
+              </ButtonLink>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Show">
+            {([
+              ["todo", "To do"],
+              ["passed", "Passed"],
+              ["all", "All"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+                className={cn("rounded-full px-4 py-1.5 text-sm font-semibold transition-colors", filter === value ? "bg-navy-900 text-white" : "bg-white text-ink-700 ring-1 ring-line hover:bg-canvas-soft")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {(filter === "todo" && totals.passed === totals.all) || (filter === "passed" && totals.passed === 0) ? (
+            <Panel>
+              <EmptyState
+                icon={filter === "todo" ? CheckCircle2 : ClipboardCheck}
+                title={filter === "todo" ? "Everything is passed" : "Nothing passed yet"}
+                description={filter === "todo" ? "You have passed every quiz and exam. Choose All or Passed to look back at your results." : "Quizzes and exams you pass will be listed here."}
+              />
+            </Panel>
+          ) : null}
+
+          {byCourse.map(({ enrollment, items: allItems }) => {
+            const passed = allItems.filter((i) => i.hasPassed).length;
+            const items = allItems.filter((i) => (filter === "all" ? true : filter === "passed" ? i.hasPassed : !i.hasPassed));
+            if (items.length === 0) return null;
+            const finished = passed === allItems.length;
             return (
               <Panel key={enrollment.uuid}>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-lg font-extrabold tracking-tight text-ink-900">{enrollment.course.title}</h2>
-                    <p className="text-xs text-ink-600">
-                      {passed} of {items.length} passed · lessons {Math.round(enrollment.progress_percent)}% complete
-                    </p>
-                  </div>
-                  <Link href={`/learner/courses/${enrollment.uuid}`} className="text-sm font-semibold text-brand-700 hover:underline">Open course</Link>
-                </div>
-                <ProgressBar value={items.length ? (passed / items.length) * 100 : 0} label="Assessments passed" tone="ok" className="mb-4" />
-                <ul className="space-y-3">
-                  {items.map((a) => (
-                    <AssessmentCard key={a.assessmentPublicId} a={a} />
-                  ))}
-                </ul>
+                <details open={!finished || filter !== "todo"} className="group">
+                  <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-extrabold tracking-tight text-ink-900">{enrollment.course.title}</h2>
+                      <p className="text-xs text-ink-600">
+                        {passed} of {allItems.length} passed · lessons {Math.round(enrollment.progress_percent)}% complete
+                        {finished ? " · all done" : ""}
+                      </p>
+                    </div>
+                    <span className="flex items-center gap-3">
+                      <Link href={`/learner/courses/${enrollment.uuid}`} className="text-sm font-semibold text-brand-700 hover:underline">Open course</Link>
+                      <ChevronDown className="size-5 text-ink-500 transition-transform group-open:rotate-180" aria-hidden />
+                    </span>
+                  </summary>
+                  <ProgressBar value={allItems.length ? (passed / allItems.length) * 100 : 0} label="Assessments passed" tone="ok" className="my-4" />
+                  <ul className="space-y-3">
+                    {items.map((a) => (
+                      <AssessmentCard key={a.assessmentPublicId} a={a} />
+                    ))}
+                  </ul>
+                </details>
               </Panel>
             );
           })}

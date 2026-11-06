@@ -677,7 +677,7 @@ export const liveApi = {
     },
 
     async verify(number: string): Promise<Certificate | null> {
-      const raw = await http<any>("GET", "/api/public/certificates/verify", undefined, { query: { token: number.trim() } });
+      const raw = await http<any>("GET", "/api/public/certificates/verify", undefined, { query: /^CA-[0-9]{4}-[A-Za-z0-9]{8}$/.test(number.trim()) ? { number: number.trim().toUpperCase() } : { token: number.trim() } });
       if (!raw?.found || !raw?.certificate) return null;
       const cert = raw.certificate;
       return {

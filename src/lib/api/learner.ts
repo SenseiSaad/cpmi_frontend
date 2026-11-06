@@ -253,13 +253,17 @@ export async function listCertificates(): Promise<MyCertificate[]> {
   return (await http<{ items: MyCertificate[] }>("GET", "/api/me/certificates")).items;
 }
 
+/** The number printed on a certificate, e.g. CA-2026-D3R9UJJ0. */
+export const looksLikeCertificateNumber = (value: string): boolean => /^CA-[0-9]{4}-[A-Za-z0-9]{8}$/.test(value.trim());
+
 /**
- * Public certificate verification by the unguessable token printed on the PDF.
- * Never verify by certificate number: numbers are enumerable and the backend rejects them.
+ * Public certificate verification. Accepts what people actually have: the number printed on the certificate, or the
+ * private token from the PDF / verification link. The backend throttles number lookups harder than token lookups.
  */
-export function verifyCertificate(token: string): Promise<CertificateVerification> {
+export function verifyCertificate(code: string): Promise<CertificateVerification> {
+  const value = code.trim();
   return http<CertificateVerification>("GET", "/api/public/certificates/verify", undefined, {
-    query: { token },
+    query: looksLikeCertificateNumber(value) ? { number: value.toUpperCase() } : { token: value },
   });
 }
 

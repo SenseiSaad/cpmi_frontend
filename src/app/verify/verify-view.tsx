@@ -69,7 +69,7 @@ function TokenForm() {
     event.preventDefault();
     const token = value.trim();
     if (token.length < 10) {
-      setError("Paste the full verification token from the certificate PDF or verification link.");
+      setError("Enter the certificate number (like CA-2026-AB12CD34) or the full verification token from the certificate PDF.");
       return;
     }
     setError(null);
@@ -85,14 +85,14 @@ function TokenForm() {
         <div>
           <h1 className="text-xl font-black text-gray-900 sm:text-2xl">Verify a credential</h1>
           <p className="mt-1 text-xs leading-relaxed text-gray-600 sm:text-sm">
-            Enter the private verification token printed on the official certificate PDF.
+            Type the certificate number printed on the certificate, or paste the verification token from its PDF or link.
           </p>
         </div>
       </div>
 
       <form onSubmit={submit} noValidate className="mt-6 space-y-4">
         <label htmlFor="verify-token" className="mb-1 block text-xs font-bold text-gray-700">
-          Verification token
+          Certificate number or verification token
         </label>
         <div className="relative">
           <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden />
@@ -101,7 +101,7 @@ function TokenForm() {
             type="text"
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            placeholder="Paste the token from the certificate"
+            placeholder="CA-2026-AB12CD34"
             autoComplete="off"
             spellCheck={false}
             className={cn(
@@ -115,7 +115,7 @@ function TokenForm() {
           <p role="alert" className="text-xs font-medium text-red-600">{error}</p>
         ) : (
           <p className="text-[11px] text-gray-400">
-            Tokens are case-sensitive and cannot be guessed from a certificate number.
+            Certificate numbers are not case-sensitive. A token, if you use one, must be copied exactly.
           </p>
         )}
         <button
@@ -208,20 +208,21 @@ function ResultView({ text, result }: { text: string; result: CertificateVerific
           tone="warn"
           icon="warn"
           eyebrow="Official Validation Status"
-          title="No certificate matches this token"
-          description="Check that the full token was copied from the certificate PDF."
+          title="No certificate matches that"
+          description="Check the certificate number or token for typing mistakes."
         />
         <div className="space-y-6 p-6 sm:p-10">
           <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
             <p className="leading-relaxed">
-              Verification uses a private token, so nothing can be looked up by certificate number. Open the official PDF and copy its
-              verification link or token exactly.
+              A certificate number looks like CA-2026-AB12CD34 and is printed under "Certificate number" on the certificate. If you
+              have the PDF you can also use the verification link printed on it. If it still does not match, the certificate may
+              not have been issued by this registry.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-5">
             <Link href="/verify" className="inline-flex items-center gap-1.5 text-xs font-bold text-primary-700 hover:text-primary-900">
-              <Search size={14} /> Try another token
+              <Search size={14} /> Try another number
             </Link>
             <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-gray-900">
               Back to CPMI Home

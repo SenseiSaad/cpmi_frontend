@@ -277,7 +277,7 @@ export default function CertificatesPage() {
               </button>
 
               <Link
-                href="/verify"
+                href={`/verify?number=${encodeURIComponent(selected.certificateNumber)}`}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 px-4 text-xs font-bold text-gray-700 transition-all hover:bg-gray-50"
               >
                 <ShieldCheck size={15} className="text-highlight-600" />
@@ -292,8 +292,8 @@ export default function CertificatesPage() {
                 <span>Registry-Recorded Credential</span>
               </div>
               <p className="text-[11px] leading-relaxed text-emerald-800">
-                Each credential is issued by the CPMI enrollment system with a unique number. Auditors verify validity with the token
-                printed on the official PDF — certificate numbers alone are never used for lookup.
+                Each credential is issued by the CPMI enrollment system with a unique number. Anyone can check it at the public
+                verification page by typing that number (or the link printed on the PDF).
               </p>
             </div>
           </div>

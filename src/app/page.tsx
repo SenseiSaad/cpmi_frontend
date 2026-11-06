@@ -63,7 +63,7 @@ export default function HomePage() {
     e.preventDefault();
     const token = verifyInput.trim();
     if (token.length < 10) {
-      setVerifyError("Paste the full verification token from the certificate PDF or verification link.");
+      setVerifyError("Enter the certificate number (like CA-2026-AB12CD34) or the full verification token.");
       return;
     }
     setVerifyError("");
@@ -836,13 +836,13 @@ export default function HomePage() {
               <form onSubmit={handleVerify} className="flex flex-col sm:flex-row gap-3 mb-8" noValidate>
                 <div className="relative flex-1">
                   <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <label htmlFor="verify-token" className="sr-only">Verification token</label>
+                  <label htmlFor="verify-token" className="sr-only">Certificate number or verification token</label>
                   <input
                     id="verify-token"
                     type="text"
                     value={verifyInput}
                     onChange={(e) => setVerifyInput(e.target.value)}
-                    placeholder="Paste the verification token from the certificate PDF"
+                    placeholder="Certificate number, e.g. CA-2026-AB12CD34"
                     autoComplete="off"
                     spellCheck={false}
                     className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
@@ -874,7 +874,7 @@ export default function HomePage() {
                   <KeyRound size={18} className="text-primary-700" />
                   <p className="text-xs font-black text-gray-900 mt-2">Copy the token</p>
                   <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
-                    Use the complete token from the link. Tokens are case-sensitive and cannot be guessed.
+                    Type the certificate number, or paste the complete token from the link.
                   </p>
                 </div>
                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200">
